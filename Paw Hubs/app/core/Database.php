@@ -337,6 +337,42 @@ class Database
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+        CREATE TABLE IF NOT EXISTS `vet_requests` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `pet_id` int(11) NOT NULL,
+          `owner_user_id` int(11) DEFAULT NULL,
+          `request_type` varchar(50) NOT NULL,
+          `title` varchar(150) NOT NULL,
+          `description` text DEFAULT NULL,
+          `status` varchar(30) NOT NULL DEFAULT 'pending',
+          `priority` varchar(20) NOT NULL DEFAULT 'normal',
+          `related_type` varchar(50) DEFAULT NULL,
+          `related_id` int(11) DEFAULT NULL,
+          `destination_country` varchar(100) DEFAULT NULL,
+          `reviewed_by` int(11) DEFAULT NULL,
+          `reviewed_at` datetime DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`),
+          KEY `pet_id` (`pet_id`),
+          KEY `status` (`status`),
+          KEY `request_type` (`request_type`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `country_pet_requirements` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `country_name` varchar(100) NOT NULL,
+          `species` varchar(50) NOT NULL DEFAULT 'dog',
+          `rabies_required` tinyint(1) NOT NULL DEFAULT 1,
+          `microchip_required` tinyint(1) NOT NULL DEFAULT 1,
+          `health_certificate_required` tinyint(1) NOT NULL DEFAULT 1,
+          `tapeworm_treatment_required` tinyint(1) NOT NULL DEFAULT 0,
+          `notes` text DEFAULT NULL,
+          `source_url` varchar(255) DEFAULT NULL,
+          `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `country_species` (`country_name`, `species`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
         CREATE TABLE IF NOT EXISTS `wellness` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
           `pet_id` int(11) DEFAULT NULL,

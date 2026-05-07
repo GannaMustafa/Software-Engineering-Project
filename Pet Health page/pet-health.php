@@ -18,6 +18,32 @@ $db = Database::getInstance();
 $connect = $db->getConnection();
 $connect->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+function createVetRequest(PDO $connect, int $petId, ?int $ownerUserId, string $requestType, string $title, string $description, string $priority = 'normal', ?string $relatedType = null, ?int $relatedId = null, ?string $destinationCountry = null): void
+{
+  $check = $connect->prepare("
+    SELECT id
+    FROM vet_requests
+    WHERE pet_id = ?
+      AND request_type = ?
+      AND status = 'pending'
+      AND COALESCE(related_type, '') = COALESCE(?, '')
+      AND COALESCE(related_id, 0) = COALESCE(?, 0)
+    LIMIT 1
+  ");
+  $check->execute([$petId, $requestType, $relatedType, $relatedId]);
+
+  if ($check->fetchColumn()) {
+    return;
+  }
+
+  $stmt = $connect->prepare("
+    INSERT INTO vet_requests
+      (pet_id, owner_user_id, request_type, title, description, priority, related_type, related_id, destination_country)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ");
+  $stmt->execute([$petId, $ownerUserId, $requestType, $title, $description, $priority, $relatedType, $relatedId, $destinationCountry]);
+}
+
 
 if (!isset($_SESSION['user_id'])) {
   header("Location: ../Paw Hubs/public/index.php?url=auth/login");
@@ -133,7 +159,7 @@ $vaccineOptions = $vaccineTypes[$speciesKey] ?? $vaccineTypes['dog'];
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_vaccine') {
-  if (in_array($role, ['vet', 'pet_owner'], true) && isset($_POST['pet_id'], $_POST['vaccine_name'], $_POST['due_date'])) {
+  if (isset($_POST['pet_id'], $_POST['vaccine_name'], $_POST['due_date'])) {
     $petId = intval($_POST['pet_id']);
     $vaccineName = trim($_POST['vaccine_name']);
     $dueDate = $_POST['due_date'];
@@ -146,6 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
         FROM vaccines
         WHERE pet_id = ?
           AND vaccine_name = ?
+          AND due_date >= CURDATE()
         LIMIT 1
       ");
       $checkStmt->execute([$petId, $vaccineName]);
@@ -161,10 +188,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
                 VALUES (?, ?, ?, ?)
             ");
       $stmt->execute([$petId, $vaccineName, $dueDate, $status]);
+      $vaccineId = (int) $connect->lastInsertId();
+
+      createVetRequest(
+        $connect,
+        $petId,
+        $user_id,
+        'vaccination_completion',
+        'Vaccination completion needed',
+        $vaccineName . ' is scheduled for ' . date('M d, Y', strtotime($dueDate)) . '. Vet should verify/administer it and complete the vaccination record.',
+        'normal',
+        'vaccine',
+        $vaccineId
+      );
 
       header("Location: " . $_SERVER['PHP_SELF'] . "?pet_id=" . $petId . "&vaccine_added=1");
       exit;
     }
+  }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_passport') {
+  $petId = intval($_POST['pet_id'] ?? 0);
+  $destinationCountry = trim($_POST['destination_country'] ?? '');
+
+  if ($petId > 0) {
+    createVetRequest(
+      $connect,
+      $petId,
+      $user_id,
+      'passport_request',
+      'Pet passport approval requested',
+      'Owner requested vet review for passport documents, medical records, rabies vaccination, and travel eligibility.',
+      'normal',
+      null,
+      null,
+      $destinationCountry !== '' ? $destinationCountry : null
+    );
+
+    header("Location: " . $_SERVER['PHP_SELF'] . "?pet_id=" . $petId . "&passport_requested=1");
+    exit;
+  }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_microchip_surgery') {
+  $petId = intval($_POST['pet_id'] ?? 0);
+
+  if ($petId > 0) {
+    createVetRequest(
+      $connect,
+      $petId,
+      $user_id,
+      'microchip_surgery',
+      'Microchip insertion surgery requested',
+      'Owner requested a microchip insertion procedure. Vet should review the pet and schedule the operation through Surgery Manager.',
+      'normal'
+    );
+
+    header("Location: " . $_SERVER['PHP_SELF'] . "?pet_id=" . $petId . "&microchip_requested=1");
+    exit;
   }
 }
 function calculateBCS(float $currentWeight, float $idealWeight): int
@@ -431,6 +513,18 @@ if ($selected_pet) {
       }
     }
   }
+}
+
+if ($selected_pet && $alert) {
+  createVetRequest(
+    $connect,
+    (int) $selected_pet['id'],
+    $user_id,
+    'chronic_alert',
+    'Chronic condition alert',
+    'Sudden weight ' . ($alert['type'] === 'gain' ? 'gain' : 'loss') . ' detected: ' . $alert['value'] . '% in ' . $alert['days'] . ' days (' . $alert['old'] . ' to ' . $alert['new'] . ' kg). Vet should review chronic condition risk and add medical guidance.',
+    'urgent'
+  );
 }
 
 ?>
@@ -792,39 +886,58 @@ if ($selected_pet) {
               <div class="row-line"><span>Tapeworm Tx.</span><span>Required (UK/IE/FI)</span></div>
               <div class="row-line"><span>Vet Signature</span><span>Dr. M. Klein</span></div>
             </div>
-            <div class="d-flex gap-2 mt-3">
-              <button class="btn-brand flex-grow-1" style="background:#fff;color:var(--brand-deep)"><i
-                  class="bi bi-file-earmark-pdf"></i> Generate PDF</button>
-              <button class="btn-ghost"><i class="bi bi-qr-code"></i></button>
+            <div class="mt-3">
+              <form method="POST" class="d-flex gap-2">
+                <input type="hidden" name="action" value="request_passport">
+                <input type="hidden" name="pet_id" value="<?= $selected_pet['id'] ?? '' ?>">
+                <input type="text" name="destination_country" class="form-control" placeholder="Destination country" style="border-radius:12px">
+                <button class="btn-brand flex-grow-1" style="background:#fff;color:var(--brand-deep)">
+                  <i class="bi bi-file-earmark-medical"></i> Request Passport
+                </button>
+              </form>
+              <form method="POST" class="mt-2">
+                <input type="hidden" name="action" value="request_microchip_surgery">
+                <input type="hidden" name="pet_id" value="<?= $selected_pet['id'] ?? '' ?>">
+                <button class="btn-ghost w-100" type="submit">
+                  <i class="bi bi-cpu"></i> Request Microchip Surgery
+                </button>
+              </form>
             </div>
 
           </div>
 
           <!-- REMINDERS -->
-          <?php if (!empty($vaccines)): ?>
-            <?php foreach (array_slice($vaccines, 0, 3) as $vaccine): ?>
-              <div class="d-flex align-items-center gap-3 py-3 border-bottom">
-                <div class="ico warn" style="width:38px;height:38px;border-radius:12px;">
-                  <i class="bi bi-eyedropper"></i>
-                </div>
-
-                <div class="flex-grow-1">
-                  <div class="fw-semibold"><?= htmlspecialchars($vaccine['vaccine_name']) ?></div>
-                  <div class="text-muted small">
-                    Due <?= htmlspecialchars($vaccine['formatted_date']) ?>
-                  </div>
-                </div>
-
-                <span class="badge-soft b-<?= htmlspecialchars($vaccine['status_badge']) ?>">
-                  <?= htmlspecialchars($vaccine['status_text']) ?>
-                </span>
-              </div>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <div class="text-center text-muted py-4">
-              No vaccine reminders yet.
+          <div class="card-soft p-4 mb-4">
+            <div class="section-title">
+              <h5 class="mb-0">Reminders</h5>
+              <a href="#" class="small text-decoration-none" style="color:var(--brand-deep)">View all →</a>
             </div>
-          <?php endif; ?>
+
+            <?php if (!empty($vaccines)): ?>
+              <?php foreach (array_slice($vaccines, 0, 3) as $vaccine): ?>
+                <div class="d-flex align-items-center gap-3 py-3 border-bottom">
+                  <div class="ico warn" style="width:38px;height:38px;border-radius:12px;">
+                    <i class="bi bi-eyedropper"></i>
+                  </div>
+
+                  <div class="flex-grow-1">
+                    <div class="fw-semibold"><?= htmlspecialchars($vaccine['vaccine_name']) ?></div>
+                    <div class="text-muted small">
+                      Due <?= htmlspecialchars($vaccine['formatted_date']) ?>
+                    </div>
+                  </div>
+
+                  <span class="badge-soft b-<?= htmlspecialchars($vaccine['status_badge']) ?>">
+                    <?= htmlspecialchars($vaccine['status_text']) ?>
+                  </span>
+                </div>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <div class="text-center text-muted py-4">
+                No vaccine reminders yet.
+              </div>
+            <?php endif; ?>
+          </div>
 
 
           <!-- HEALTH RECORDS -->
@@ -1082,6 +1195,7 @@ if ($selected_pet) {
   </script>
 
   <script src="pet-health.js"></script>
+  <?php require_once $pawHubsPath . '/app/views/partials/footer.php'; ?>
 
 </body>
 
