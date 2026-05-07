@@ -1,10 +1,12 @@
 <?php
 
-class Database {
+class Database
+{
     private static $instance = null;
     private $connection;
 
-    private function __construct() {
+    private function __construct()
+    {
         $host = "localhost";
         $dbName = "pawhub";
         $username = "root";
@@ -17,7 +19,7 @@ class Database {
 
             // 2. إنشاء قاعدة البيانات لو مش موجودة
             $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
-            
+
             // 3. الاتصال بقاعدة البيانات المطلوبة فعلياً
             $this->connection = new PDO("mysql:host=$host;dbname=$dbName;charset=utf8mb4", $username, $password);
             $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -25,24 +27,26 @@ class Database {
             // 4. إنشاء الجداول الأساسية لو مش موجودة (Self-Healing)
             $this->createTables();
             $this->migrateTables();
-
         } catch (PDOException $e) {
             die("Database Error: " . $e->getMessage());
         }
     }
 
-    public static function getInstance() {
+    public static function getInstance()
+    {
         if (!self::$instance) {
             self::$instance = new self();
         }
         return self::$instance;
     }
 
-    public function getConnection() {
+    public function getConnection()
+    {
         return $this->connection;
     }
 
-    private function createTables() {
+    private function createTables()
+    {
         $sql = "
         CREATE TABLE IF NOT EXISTS `users` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -260,14 +264,25 @@ class Database {
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-        CREATE TABLE IF NOT EXISTS `orders` (
-          `id` int(11) NOT NULL AUTO_INCREMENT,
-          `owner_id` int(11) NOT NULL,
-          `vendor_id` int(11) NOT NULL,
-          `total_price` double NOT NULL DEFAULT 0,
-          `availability_status` varchar(20) NOT NULL DEFAULT 'pending',
-          `is_recurring` tinyint(1) NOT NULL DEFAULT 0,
-          PRIMARY KEY (`id`)
+        CREATE TABLE IF NOT EXISTS orders (
+          id int(11) NOT NULL AUTO_INCREMENT,
+          owner_id int(11) NOT NULL,
+          vendor_id int(11) NOT NULL,
+          total_price double NOT NULL DEFAULT 0,
+          is_recurring tinyint(1) NOT NULL DEFAULT 0,
+          delivery_date date DEFAULT NULL,
+          PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS order_items (
+          id int(11) NOT NULL AUTO_INCREMENT,
+          order_id int(11) NOT NULL,
+          product_name varchar(150) NOT NULL,
+          price double NOT NULL DEFAULT 0,
+          quantity int(11) NOT NULL DEFAULT 1,
+          availability_status varchar(20) NOT NULL DEFAULT 'pending',
+          points int(11) NOT NULL DEFAULT 0,
+          PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
         CREATE TABLE IF NOT EXISTS `services` (
@@ -352,12 +367,34 @@ class Database {
           `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `daily_logs` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `pet_id` int(11) NOT NULL,
+          `metric_type` enum('water_intake','insulin','mobility_score') NOT NULL,
+          `metric_value` decimal(10,2) NOT NULL,
+          `logged_date` date NOT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+        CREATE TABLE IF NOT EXISTS `pet_weight_logs` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `pet_id` int(11) NOT NULL,
+          `weight` decimal(5,2) NOT NULL,
+          `bcs_score` int(11) NOT NULL,
+          `logged_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
         ";
-        
+
         $this->connection->exec($sql);
     }
 
-    private function migrateTables() {
+    private function migrateTables()
+    {
         $this->addColumnIfMissing('users', 'username', "`username` varchar(100) NOT NULL DEFAULT '' AFTER `id`");
         $this->addColumnIfMissing('users', 'phone', "`phone` varchar(20) DEFAULT NULL AFTER `email`");
         $this->addColumnIfMissing('users', 'password', "`password` varchar(255) NOT NULL DEFAULT '' AFTER `phone`");
@@ -410,15 +447,21 @@ class Database {
         $this->addColumnIfMissing('reviews', 'comment', "`comment` text DEFAULT NULL AFTER `rating`");
         $this->addColumnIfMissing('reviews', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `comment`");
 
-        $this->addColumnIfMissing('vendors', 'name', "`name` varchar(50) NOT NULL DEFAULT '' AFTER `id`");
-        $this->addColumnIfMissing('vendors', 'balance', "`balance` double NOT NULL DEFAULT 0 AFTER `name`");
-        $this->addColumnIfMissing('vendors', 'is_active', "`is_active` tinyint(1) NOT NULL DEFAULT 1 AFTER `balance`");
-        $this->addColumnIfMissing('orders', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('orders', 'vendor_id', "`vendor_id` int(11) NOT NULL AFTER `owner_id`");
-        $this->addColumnIfMissing('orders', 'total_price', "`total_price` double NOT NULL DEFAULT 0 AFTER `vendor_id`");
-        $this->addColumnIfMissing('orders', 'availability_status', "`availability_status` varchar(20) NOT NULL DEFAULT 'pending' AFTER `total_price`");
-        $this->addColumnIfMissing('orders', 'status', "`status` varchar(20) NOT NULL DEFAULT 'pending' AFTER `availability_status`");
-        $this->addColumnIfMissing('orders', 'is_recurring', "`is_recurring` tinyint(1) NOT NULL DEFAULT 0 AFTER `status`");
+        $this->addColumnIfMissing('vendors', 'name', "name varchar(50) NOT NULL DEFAULT '' AFTER id");
+        $this->addColumnIfMissing('vendors', 'balance', "balance double NOT NULL DEFAULT 0 AFTER name");
+        $this->addColumnIfMissing('vendors', 'is_active', "is_active tinyint(1) NOT NULL DEFAULT 1 AFTER balance");
+        $this->addColumnIfMissing('orders', 'owner_id', "owner_id int(11) NOT NULL AFTER id");
+        $this->addColumnIfMissing('orders', 'vendor_id', "vendor_id int(11) NOT NULL AFTER owner_id");
+        $this->addColumnIfMissing('orders', 'total_price', "total_price double NOT NULL DEFAULT 0 AFTER vendor_id");
+        $this->addColumnIfMissing('orders', 'is_recurring', "is_recurring tinyint(1) NOT NULL DEFAULT 0 AFTER status");
+        $this->addColumnIfMissing('orders', 'delivery_date', "delivery_date date DEFAULT NULL AFTER is_recurring");
+
+        $this->addColumnIfMissing('order_items', 'order_id', "order_id int(11) NOT NULL AFTER id");
+        $this->addColumnIfMissing('order_items', 'product_name', "product_name varchar(150) NOT NULL AFTER order_id");
+        $this->addColumnIfMissing('order_items', 'price', "price double NOT NULL DEFAULT 0 AFTER product_name");
+        $this->addColumnIfMissing('order_items', 'quantity', "quantity int(11) NOT NULL DEFAULT 1 AFTER price");
+        $this->addColumnIfMissing('order_items', 'availability_status', "availability_status varchar(20) NOT NULL DEFAULT 'pending' AFTER quantity");
+        $this->addColumnIfMissing('order_items', 'points', "points int(11) NOT NULL DEFAULT 0 AFTER availability_status");
 
         $this->addColumnIfMissing('marketplace_items', 'name', "`name` varchar(255) NOT NULL DEFAULT '' AFTER `id`");
         $this->addColumnIfMissing('marketplace_items', 'short_description', "`short_description` text DEFAULT NULL AFTER `name`");
@@ -545,7 +588,8 @@ class Database {
         $this->seedVetActionPermissions();
     }
 
-    private function addColumnIfMissing($table, $column, $definition) {
+    private function addColumnIfMissing($table, $column, $definition)
+    {
         $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.COLUMNS
@@ -560,7 +604,8 @@ class Database {
         }
     }
 
-    private function columnExists($table, $column) {
+    private function columnExists($table, $column)
+    {
         $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.COLUMNS
@@ -572,7 +617,8 @@ class Database {
         return (int) $stmt->fetchColumn() > 0;
     }
 
-    private function tableExists($table) {
+    private function tableExists($table)
+    {
         $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.TABLES
@@ -583,7 +629,8 @@ class Database {
         return (int) $stmt->fetchColumn() > 0;
     }
 
-    private function backfillUsernames() {
+    private function backfillUsernames()
+    {
         if ($this->columnExists('users', 'name')) {
             $this->connection->exec("
                 UPDATE `users`
@@ -600,13 +647,15 @@ class Database {
         ");
     }
 
-    private function relaxLegacyNameColumn() {
+    private function relaxLegacyNameColumn()
+    {
         if ($this->columnExists('users', 'name')) {
             $this->connection->exec("ALTER TABLE `users` MODIFY `name` varchar(100) DEFAULT NULL");
         }
     }
 
-    private function backfillServices() {
+    private function backfillServices()
+    {
         if (!$this->tableExists('services') || !$this->columnExists('services', 'name')) {
             return;
         }
@@ -631,7 +680,8 @@ class Database {
         }
     }
 
-    private function seedVetActionPermissions() {
+    private function seedVetActionPermissions()
+    {
         if (!$this->tableExists('veterinarians') || !$this->tableExists('vet_action_permissions')) {
             return;
         }
@@ -657,7 +707,8 @@ class Database {
         }
     }
 
-    private function seedMarketplaceItems() {
+    private function seedMarketplaceItems()
+    {
         if (!$this->tableExists('marketplace_items')) {
             return;
         }

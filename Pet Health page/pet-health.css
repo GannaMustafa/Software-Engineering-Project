@@ -1,0 +1,520 @@
+:root {
+    --brand: #6BB5A8;
+    /* teal */
+    --brand-deep: #4f9a8d;
+    --brand-2: #94CDD3;
+    /* sky */
+    --accent: #9BC870;
+    /* green */
+    --sage: #CAD7A5;
+    /* sage */
+    --mint: #C8E4D6;
+    /* mint */
+    --bg: #f4f9f7;
+    --ink: #1f2a36;
+    --muted: #6b7785;
+    --card: #ffffff;
+    --ring: 0 6px 24px rgba(31, 42, 54, .06);
+}
+
+* {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+
+}
+
+body {
+
+    background: var(--bg);
+    color: var(--ink);
+}
+
+/* Topbar */
+.topbar {
+    background: #fff;
+    border-bottom: 1px solid #e7efec;
+    height: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    top: 0;
+    z-index: 5;
+}
+
+.search {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 360px;
+    max-width: 50vw
+}
+
+.search input {
+    border: 0;
+    background: transparent;
+    outline: none;
+    width: 100%
+}
+
+
+/* Cards */
+.card-soft {
+    background: var(--card);
+    border: 0;
+    border-radius: 18px;
+    box-shadow: var(--ring)
+}
+
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 14px
+}
+
+.stat .ico {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-size: 1.2rem
+}
+
+.ico.teal {
+    background: #e2f1ee;
+    color: var(--brand-deep)
+}
+
+.ico.green {
+    background: #ecf4dc;
+    color: #5e8c39
+}
+
+.ico.sage {
+    background: #eef2dd;
+    color: #7f8f55
+}
+
+.ico.mint {
+    background: #e2f1ea;
+    color: #3f8a72
+}
+
+.ico.sky {
+    background: #e1f0f3;
+    color: #3d8b95
+}
+
+.ico.warn {
+    background: #fdecdc;
+    color: #b45e1c
+}
+
+.ico.danger {
+    background: #fde2e2;
+    color: #b53030
+}
+
+/* Pet header */
+.pet-hero {
+    background: linear-gradient(135deg, var(--mint) 0%, #fff 65%);
+    border-radius: 22px;
+    padding: 22px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    box-shadow: var(--ring)
+}
+
+.pet-avatar {
+    width: 110px;
+    height: 110px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--brand-2), var(--brand));
+    display: grid;
+    place-items: center;
+    font-size: 3.4rem
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #e1ebe7;
+    color: var(--ink);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600
+}
+
+.chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand)
+}
+
+.health-score {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: conic-gradient(var(--brand) 0 86%, #e9efed 0);
+    display: grid;
+    place-items: center;
+    position: relative
+}
+
+.health-score::after {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    background: #fff;
+    border-radius: 50%
+}
+
+.health-score span {
+    position: relative;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--brand-deep)
+}
+
+.stat .v {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1
+}
+
+.stat .l {
+    color: var(--muted);
+    font-size: .85rem
+}
+
+/* Vaccine list */
+.vacc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px dashed #eceeef
+}
+
+.vacc-row:last-child {
+    border-bottom: 0
+}
+
+.badge-soft {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: .74rem
+}
+
+.b-due {
+    background: #fdecdc;
+    color: #b45e1c
+}
+
+.b-ok {
+    background: #e2f1ee;
+    color: #3f8a72
+}
+
+.b-over {
+    background: #fde2e2;
+    color: #b53030
+}
+
+.b-soon {
+    background: #e1f0f3;
+    color: #3d8b95
+}
+
+/* Chronic */
+.metric {
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 14px;
+    margin: 10px;
+
+
+}
+
+.metric h6 {
+    margin: 0;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .06em
+}
+
+.metric .num {
+    font-weight: 800;
+    font-size: 1.4rem
+}
+
+.trend-up {
+    color: #b53030
+}
+
+.trend-dn {
+    color: #3f8a72
+}
+
+.tab-pill {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 10px
+}
+
+.tab-pill.active {
+    background: var(--brand);
+    color: #fff
+}
+
+/* Passport */
+.passport {
+    background: linear-gradient(135deg, var(--brand-deep), var(--brand) 60%, var(--brand-2));
+    color: #f3fbf9;
+    border-radius: 22px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden
+}
+
+.passport::before {
+    content: "";
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .15)
+}
+
+.passport .seal {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, .6);
+    display: grid;
+    place-items: center;
+    font-size: 1.6rem
+}
+
+.passport .row-line {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .18);
+    font-size: .9rem
+}
+
+.passport .row-line span:first-child {
+    color: #dff1ec
+}
+
+/* Records timeline */
+.timeline {
+    position: relative;
+    padding-left: 22px
+}
+
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--mint)
+}
+
+.tl-item {
+    position: relative;
+    padding: 10px 0 14px
+}
+
+.tl-item::before {
+    content: "";
+    position: absolute;
+    left: -19px;
+    top: 14px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid var(--brand)
+}
+
+.btn-brand {
+    background: var(--brand);
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-weight: 600
+}
+
+.btn-brand:hover {
+    background: var(--brand-deep);
+    color: #fff
+}
+
+.btn-ghost {
+    background: #fff;
+    border: 1px solid #e1ebe7;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-weight: 600;
+    color: var(--ink)
+}
+
+h5,
+h6 {
+    font-weight: 700
+}
+
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px
+}
+
+.section-title h5 {
+    margin: 0
+}
+
+.ico {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.ico svg {
+    color: inherit;
+    vertical-align: middle;
+}
+
+/* Pet Selector in Topbar */
+#petSelector {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+#petSelector:hover {
+    background: var(--bg);
+    border-color: var(--mint);
+}
+
+.dropdown-menu {
+    border: 1px solid #e1ebe7 !important;
+    box-shadow: 0 8px 32px rgba(31, 42, 54, 0.08) !important;
+}
+
+.dropdown-item {
+    border-radius: 12px !important;
+    transition: all 0.15s;
+}
+
+.dropdown-item:hover {
+    background: var(--bg);
+}
+
+.dropdown-item.active {
+    background: var(--mint);
+    color: var(--brand-deep);
+    font-weight: 600;
+}
+
+.dropdown-item.active .badge-soft {
+    background: var(--brand);
+    color: #fff;
+}
+
+#addPetBtn {
+    color: var(--brand-deep) !important;
+}
+
+#addPetBtn:hover {
+    background: var(--mint) !important;
+}
+
+.dropdown-toggle::after {
+    display: none !important;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.dropdown-menu {
+    border: 1px solid #e1ebe7 !important;
+    box-shadow: 0 10px 40px rgba(31, 42, 54, 0.1) !important;
+}
+
+.list-group-item-action:hover {
+    background-color: var(--bg);
+    transition: background 0.2s;
+}
+
+.dropdown-toggle::after {
+    display: none !important;
+}
+
+.list-group::-webkit-scrollbar {
+    width: 6px;
+}
+
+.list-group::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.list-group::-webkit-scrollbar-thumb {
+    background-color: #cad7a5;
+    border-radius: 20px;
+}
+
+
+
+.vacc-list {
+    min-height: 300px;
+}
+
+.vacc-row {
+    min-height: 82px;
+}
+
+.vacc-empty {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    border-top: 1px dashed #eceeef;
+}
+
+.footer {
+    margin-top: 20px;
+}
