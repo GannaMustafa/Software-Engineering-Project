@@ -100,6 +100,7 @@ class HomeController extends Controller {
         $weight = is_numeric($weight) ? number_format((float) $weight, 2, '.', '') : '0.00';
         $color = trim($_POST['color'] ?? '');
         $vaccinationStatus = trim($_POST['vaccination_status'] ?? 'Unknown');
+        $allergies = trim($_POST['allergies'] ?? '');
         $medicalNotes = trim($_POST['medical_notes'] ?? '');
         $imageName = 'default-pet.png';
 
@@ -158,7 +159,7 @@ class HomeController extends Controller {
 
         try {
             $stmt = $db->prepare(
-                "INSERT INTO pets (owner_id, name, species, breed, age, gender, weight, color, vaccination_status, medical_notes, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                "INSERT INTO pets (owner_id, name, species, breed, age, gender, weight, color, vaccination_status, allergies, medical_notes, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $ownerId,
@@ -170,6 +171,7 @@ class HomeController extends Controller {
                 $weight,
                 $color,
                 $vaccinationStatus,
+                $allergies,
                 $medicalNotes,
                 $imageName
             ]);
@@ -197,6 +199,7 @@ class HomeController extends Controller {
                     'weight' => $weight,
                     'color' => $color,
                     'vaccination_status' => $vaccinationStatus,
+                    'allergies' => $allergies,
                     'medical_notes' => $medicalNotes,
                     'image' => $imageName,
                     'created_at' => date('Y-m-d H:i:s'),
@@ -246,6 +249,7 @@ class HomeController extends Controller {
         $weight = is_numeric($weight) ? number_format((float) $weight, 2, '.', '') : '0.00';
         $color = trim($_POST['color'] ?? '');
         $vaccinationStatus = trim($_POST['vaccination_status'] ?? 'Unknown');
+        $allergies = trim($_POST['allergies'] ?? '');
         $medicalNotes = trim($_POST['medical_notes'] ?? '');
 
         $allowedSpecies = ['Dog', 'Cat', 'Bird', 'Other'];
@@ -313,7 +317,7 @@ class HomeController extends Controller {
 
         try {
             $stmt = $db->prepare(
-                "UPDATE pets SET name = ?, species = ?, breed = ?, age = ?, gender = ?, weight = ?, color = ?, vaccination_status = ?, medical_notes = ?, image = ? WHERE id = ? AND owner_id = ?"
+                "UPDATE pets SET name = ?, species = ?, breed = ?, age = ?, gender = ?, weight = ?, color = ?, vaccination_status = ?, allergies = ?, medical_notes = ?, image = ? WHERE id = ? AND owner_id = ?"
             );
             $stmt->execute([
                 $name,
@@ -324,6 +328,7 @@ class HomeController extends Controller {
                 $weight,
                 $color,
                 $vaccinationStatus,
+                $allergies,
                 $medicalNotes,
                 $imageName,
                 $petId,
@@ -352,6 +357,7 @@ class HomeController extends Controller {
                     'weight' => $weight,
                     'color' => $color,
                     'vaccination_status' => $vaccinationStatus,
+                    'allergies' => $allergies,
                     'medical_notes' => $medicalNotes,
                     'image' => $imageName,
                 ]

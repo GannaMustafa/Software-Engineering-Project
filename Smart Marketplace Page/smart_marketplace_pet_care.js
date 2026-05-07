@@ -95,7 +95,7 @@ document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
         badge: d.badge, badgeLabel: d.badgeLabel,
         pts: parseInt(d.pts),
         taskPoints: parseInt(d.taskPoints || '0'),
-        isAutoShip: d.autoShip === '1' || d.badge === 'sub',
+        isAutoShip: d.autoShip === '1',
         qty: 1
       });
     }
