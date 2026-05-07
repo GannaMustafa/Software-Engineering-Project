@@ -1,7 +1,9 @@
 <?php
 
-class ClinicalController extends Controller {
-    public function labHub() {
+class ClinicalController extends Controller
+{
+    public function labHub()
+    {
         if (!isset($_SESSION['user_id'])) {
             header("Location: index.php?url=auth/login");
             exit;
@@ -43,7 +45,8 @@ class ClinicalController extends Controller {
         ]);
     }
 
-    public function index() {
+    public function index()
+    {
         if (!isset($_SESSION['user_id'])) {
             header("Location: index.php?url=auth/login");
             exit;
@@ -112,7 +115,8 @@ class ClinicalController extends Controller {
         ]);
     }
 
-    public function surgeryManager() {
+    public function surgeryManager()
+    {
         if (!isset($_SESSION['user_id'])) {
             header("Location: index.php?url=auth/login");
             exit;
@@ -158,7 +162,8 @@ class ClinicalController extends Controller {
         ]);
     }
 
-    public function referralsWorkflow() {
+    public function referralsWorkflow()
+    {
         if (!isset($_SESSION['user_id'])) {
             header("Location: index.php?url=auth/login");
             exit;
@@ -204,7 +209,8 @@ class ClinicalController extends Controller {
         ]);
     }
 
-    public function resourceManager() {
+    public function resourceManager()
+    {
         if (!isset($_SESSION['user_id'])) {
             header("Location: index.php?url=auth/login");
             exit;
@@ -274,7 +280,8 @@ class ClinicalController extends Controller {
         ]);
     }
 
-    private function procedures($db, $vetId) {
+    private function procedures($db, $vetId)
+    {
         $where = $vetId ? 'WHERE mp.vet_id = ?' : '';
         return $this->fetchAll(
             $db,
@@ -292,7 +299,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function labReports($db, $vetId) {
+    private function labReports($db, $vetId)
+    {
         $where = $vetId ? 'WHERE lr.vet_id = ?' : '';
         return $this->fetchAll(
             $db,
@@ -310,7 +318,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function handleLabUpload($db, $role, $vetId, $ownerId) {
+    private function handleLabUpload($db, $role, $vetId, $ownerId)
+    {
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $assignedVetId = (int) ($_POST['vet_id'] ?? 0);
         $testName = trim($_POST['test_name'] ?? '');
@@ -385,7 +394,8 @@ class ClinicalController extends Controller {
         return ['Lab result uploaded and simplified insight generated.', [], $insight];
     }
 
-    private function storeLabFile(&$errors) {
+    private function storeLabFile(&$errors)
+    {
         if (empty($_FILES['lab_file']['name'])) {
             return null;
         }
@@ -417,7 +427,8 @@ class ClinicalController extends Controller {
         return 'lab-results/' . $fileName;
     }
 
-    private function buildLabInsight($testName, $summary, $rawValues, $status, $notes) {
+    private function buildLabInsight($testName, $summary, $rawValues, $status, $notes)
+    {
         $source = strtolower($testName . ' ' . $summary . ' ' . $rawValues . ' ' . $notes);
         $points = [];
         $points[] = "This $testName result was received and organized into a simple owner-friendly summary.";
@@ -447,14 +458,16 @@ class ClinicalController extends Controller {
         return implode("\n", $points);
     }
 
-    private function labHubPets($db, $role, $vetId, $ownerId) {
+    private function labHubPets($db, $role, $vetId, $ownerId)
+    {
         if ($role === 'pet_owner') {
             return $this->fetchAll($db, "SELECT p.*, u.username AS owner_name FROM pets p LEFT JOIN pet_owners po ON po.id = p.owner_id LEFT JOIN users u ON u.id = po.user_id WHERE p.owner_id = ? ORDER BY p.name ASC", [$ownerId]);
         }
         return $this->pets($db);
     }
 
-    private function labHubReports($db, $role, $vetId, $ownerId) {
+    private function labHubReports($db, $role, $vetId, $ownerId)
+    {
         $where = '';
         $params = [];
         if ($role === 'pet_owner') {
@@ -481,7 +494,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function canAccessPet($db, $petId, $role, $vetId, $ownerId) {
+    private function canAccessPet($db, $petId, $role, $vetId, $ownerId)
+    {
         if ($role === 'admin') {
             return true;
         }
@@ -494,7 +508,8 @@ class ClinicalController extends Controller {
         return false;
     }
 
-    private function writeAudit($db, $action, $entityType, $entityId, $details) {
+    private function writeAudit($db, $action, $entityType, $entityId, $details)
+    {
         try {
             $stmt = $db->prepare("INSERT INTO audit_logs (user_id, entity_type, entity_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$_SESSION['user_id'] ?? null, $entityType, $entityId, $action, $details, $_SERVER['REMOTE_ADDR'] ?? null]);
@@ -503,7 +518,8 @@ class ClinicalController extends Controller {
         }
     }
 
-    private function vetPermissions($db, $vetId) {
+    private function vetPermissions($db, $vetId)
+    {
         return $this->fetchAll(
             $db,
             "SELECT vap.*, u.username AS updated_by_name
@@ -515,7 +531,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function resolveVetActionPermission($db, $vetId, $actionKey) {
+    private function resolveVetActionPermission($db, $vetId, $actionKey)
+    {
         $permission = $this->fetchOne(
             $db,
             "SELECT * FROM vet_action_permissions WHERE vet_id = ? AND action_key = ? AND is_active = 1 LIMIT 1",
@@ -539,7 +556,8 @@ class ClinicalController extends Controller {
         ];
     }
 
-    private function handleClinicalWorkflowRequest($db, $vetId) {
+    private function handleClinicalWorkflowRequest($db, $vetId)
+    {
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $actionKey = trim($_POST['action_key'] ?? '');
         $summary = trim($_POST['summary'] ?? '');
@@ -618,7 +636,8 @@ class ClinicalController extends Controller {
         return [$messageMap[$permission['access_mode'] ?? 'request_admin'] ?? 'Workflow request created.', []];
     }
 
-    private function handleLabInterpretation($db, $vetId) {
+    private function handleLabInterpretation($db, $vetId)
+    {
         $reportId = (int) ($_POST['report_id'] ?? 0);
         $diagnosis = trim($_POST['diagnosis'] ?? '');
         $notes = trim($_POST['interpretation_notes'] ?? '');
@@ -659,7 +678,8 @@ class ClinicalController extends Controller {
         return ['Lab interpretation saved successfully.', []];
     }
 
-    private function handleReferralTransfer($db, $vetId) {
+    private function handleReferralTransfer($db, $vetId)
+    {
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $toVetId = (int) ($_POST['to_vet_id'] ?? 0);
         $specialty = trim($_POST['specialty'] ?? '');
@@ -709,7 +729,8 @@ class ClinicalController extends Controller {
         return ['Referral case transferred successfully.', []];
     }
 
-    private function createClinicalActionRequest($db, $actionKey, $title, $petId, $ownerUserId, $requesterUserId, $requesterRole, $targetVetId, $accessMode, $payload, $notes) {
+    private function createClinicalActionRequest($db, $actionKey, $title, $petId, $ownerUserId, $requesterUserId, $requesterRole, $targetVetId, $accessMode, $payload, $notes)
+    {
         $ownerStatus = $accessMode === 'request_user' ? 'pending' : 'not_needed';
         $adminStatus = $accessMode === 'request_admin' ? 'pending' : 'not_needed';
         $requestStatus = $accessMode === 'approve_user' ? 'approved' : 'pending';
@@ -723,7 +744,8 @@ class ClinicalController extends Controller {
         return (int) $db->lastInsertId();
     }
 
-    private function petOwnerUserId($db, $petId) {
+    private function petOwnerUserId($db, $petId)
+    {
         $row = $this->fetchOne(
             $db,
             "SELECT po.user_id
@@ -735,7 +757,8 @@ class ClinicalController extends Controller {
         return (int) ($row['user_id'] ?? 0);
     }
 
-    private function vetWorkflowRequests($db, $vetId) {
+    private function vetWorkflowRequests($db, $vetId)
+    {
         return $this->fetchAll(
             $db,
             "SELECT car.*, p.name AS pet_name, owner_u.username AS owner_name, requester_u.username AS requester_name
@@ -750,7 +773,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function specialistDirectory($db, $vetId) {
+    private function specialistDirectory($db, $vetId)
+    {
         $specialists = $this->fetchAll(
             $db,
             "SELECT v.id, u.username, u.email, v.specialization,
@@ -774,7 +798,8 @@ class ClinicalController extends Controller {
         return $specialists;
     }
 
-    private function doctorRating($db, $vetId) {
+    private function doctorRating($db, $vetId)
+    {
         if ($this->columnExists($db, 'reviews', 'vet_id')) {
             $row = $this->fetchOne($db, "SELECT ROUND(AVG(rating), 1) AS rating FROM reviews WHERE vet_id = ?", [$vetId]);
             if (!empty($row['rating'])) {
@@ -790,7 +815,8 @@ class ClinicalController extends Controller {
         return '4.7';
     }
 
-    private function incomingLabStats($labReports) {
+    private function incomingLabStats($labReports)
+    {
         return [
             'new' => count(array_filter($labReports, fn($report) => strtolower($report['status'] ?? '') === 'pending')),
             'critical' => count(array_filter($labReports, fn($report) => strtolower($report['status'] ?? '') === 'critical')),
@@ -798,7 +824,8 @@ class ClinicalController extends Controller {
         ];
     }
 
-    private function incomingLabReports($labReports) {
+    private function incomingLabReports($labReports)
+    {
         return array_values(array_filter(
             $labReports,
             fn($report) => in_array(strtolower($report['status'] ?? ''), ['pending', 'critical'], true)
@@ -806,7 +833,8 @@ class ClinicalController extends Controller {
         ));
     }
 
-    private function transferCases($procedures, $referrals) {
+    private function transferCases($procedures, $referrals)
+    {
         $cases = [];
 
         foreach ($procedures as $procedure) {
@@ -840,7 +868,8 @@ class ClinicalController extends Controller {
         return array_values($cases);
     }
 
-    private function columnExists($db, $table, $column) {
+    private function columnExists($db, $table, $column)
+    {
         $stmt = $db->prepare(
             "SELECT COUNT(*)
              FROM INFORMATION_SCHEMA.COLUMNS
@@ -852,7 +881,8 @@ class ClinicalController extends Controller {
         return (int) $stmt->fetchColumn() > 0;
     }
 
-    private function referrals($db, $vetId) {
+    private function referrals($db, $vetId)
+    {
         $where = $vetId ? 'WHERE r.from_vet_id = ? OR r.to_vet_id = ?' : '';
         return $this->fetchAll(
             $db,
@@ -870,7 +900,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function auditLogs($db, $vetId, $role, $limit = 5) {
+    private function auditLogs($db, $vetId, $role, $limit = 5)
+    {
         $limit = (int) $limit;
         if ($limit <= 0) {
             $limit = 5;
@@ -902,7 +933,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function countReferrals($db, $vetId) {
+    private function countReferrals($db, $vetId)
+    {
         if ($vetId) {
             $stmt = $db->prepare("SELECT COUNT(*) FROM referrals WHERE from_vet_id = ? OR to_vet_id = ?");
             $stmt->execute([$vetId, $vetId]);
@@ -912,7 +944,8 @@ class ClinicalController extends Controller {
         return $this->countRows($db, 'referrals');
     }
 
-    private function countRows($db, $table, $where = null, $params = []) {
+    private function countRows($db, $table, $where = null, $params = [])
+    {
         $sql = "SELECT COUNT(*) FROM `$table`";
         if ($where) {
             $sql .= " WHERE $where";
@@ -923,7 +956,8 @@ class ClinicalController extends Controller {
         return (int) $stmt->fetchColumn();
     }
 
-    private function pets($db) {
+    private function pets($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT p.id, p.name, p.species, u.username AS owner_name
@@ -935,7 +969,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function operatingRooms($db) {
+    private function operatingRooms($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT * FROM operating_rooms ORDER BY name ASC",
@@ -943,7 +978,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function surgicalEquipment($db) {
+    private function surgicalEquipment($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT * FROM surgical_equipment ORDER BY name ASC",
@@ -951,7 +987,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function specialists($db) {
+    private function specialists($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT v.id, u.username, v.specialization
@@ -962,7 +999,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function procedureBookings($db, $vetId, $limit = null, $latest = false) {
+    private function procedureBookings($db, $vetId, $limit = null, $latest = false)
+    {
         $where = $vetId ? 'WHERE pb.vet_id = ? OR pb.specialist_id = ?' : '';
         $orderDir = $latest ? 'DESC' : 'ASC';
         $sql = "SELECT pb.*, p.name AS pet_name, r.name AS room_name, e.name AS equipment_name, s.username AS specialist_name
@@ -985,7 +1023,8 @@ class ClinicalController extends Controller {
         return $this->fetchAll($db, $sql, $params);
     }
 
-    private function handleProcedureBooking($db, $vetId, $role) {
+    private function handleProcedureBooking($db, $vetId, $role)
+    {
         $errors = [];
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $procedureName = trim($_POST['procedure_name'] ?? '');
@@ -1058,14 +1097,17 @@ class ClinicalController extends Controller {
         return ['Procedure scheduled successfully. The resource manager blocked any double-booking automatically.', []];
     }
 
-    private function findBookingConflict($db, $roomId, $equipmentId, $specialistId, $start, $end) {
+    private function findBookingConflict($db, $roomId, $equipmentId, $specialistId, $start, $end)
+    {
         $problems = [];
 
-        foreach ([
-            ['field' => 'room_id', 'id' => $roomId, 'label' => 'Operating room'],
-            ['field' => 'equipment_id', 'id' => $equipmentId, 'label' => 'Equipment'],
-            ['field' => 'specialist_id', 'id' => $specialistId, 'label' => 'Specialist']
-        ] as $resource) {
+        foreach (
+            [
+                ['field' => 'room_id', 'id' => $roomId, 'label' => 'Operating room'],
+                ['field' => 'equipment_id', 'id' => $equipmentId, 'label' => 'Equipment'],
+                ['field' => 'specialist_id', 'id' => $specialistId, 'label' => 'Specialist']
+            ] as $resource
+        ) {
             $stmt = $db->prepare(
                 "SELECT COUNT(*) FROM procedure_bookings
                  WHERE status != 'cancelled'
@@ -1093,7 +1135,8 @@ class ClinicalController extends Controller {
         return implode(' ', $problems);
     }
 
-    private function availableRoomForWindow($db, $start, $end) {
+    private function availableRoomForWindow($db, $start, $end)
+    {
         $stmt = $db->prepare(
             "SELECT r.*
              FROM operating_rooms r
@@ -1112,7 +1155,8 @@ class ClinicalController extends Controller {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    private function clinicalReports($db) {
+    private function clinicalReports($db)
+    {
         return [
             'monthly' => $this->fetchAll($db, "SELECT DATE_FORMAT(start_time, '%Y-%m') AS label, COUNT(*) AS total FROM procedure_bookings GROUP BY DATE_FORMAT(start_time, '%Y-%m') ORDER BY label DESC LIMIT 6"),
             'rooms' => $this->fetchAll($db, "SELECT r.name AS label, COUNT(pb.id) AS total FROM operating_rooms r LEFT JOIN procedure_bookings pb ON pb.room_id = r.id GROUP BY r.id, r.name ORDER BY total DESC LIMIT 6"),
@@ -1120,7 +1164,8 @@ class ClinicalController extends Controller {
         ];
     }
 
-    private function accessControls($db) {
+    private function accessControls($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT ac.*, u.username AS created_by_name
@@ -1131,7 +1176,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function transferLogs($db) {
+    private function transferLogs($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT al.*, COALESCE(u.username, 'System') AS sender_name
@@ -1146,7 +1192,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function securityAlerts($db) {
+    private function securityAlerts($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT al.*, COALESCE(u.username, 'System') AS actor_name
@@ -1163,7 +1210,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function vetRequests($db) {
+    private function vetRequests($db)
+    {
         return $this->fetchAll(
             $db,
             "SELECT vr.*, p.name AS pet_name, p.species, u.username AS owner_name
@@ -1179,7 +1227,8 @@ class ClinicalController extends Controller {
         );
     }
 
-    private function handleVetRequestResolution($db, $vetId) {
+    private function handleVetRequestResolution($db, $vetId)
+    {
         $requestId = (int) ($_POST['request_id'] ?? 0);
         $resolution = $_POST['resolution'] ?? 'approved';
         $allowed = ['approved', 'completed', 'rejected'];
@@ -1196,19 +1245,27 @@ class ClinicalController extends Controller {
         if ($resolution === 'completed' && ($request['related_type'] ?? '') === 'vaccine' && !empty($request['related_id'])) {
             $stmt = $db->prepare("UPDATE vaccines SET status = 'completed' WHERE id = ?");
             $stmt->execute([(int) $request['related_id']]);
+
+            if (($request['status'] ?? '') !== 'completed' && !empty($request['owner_user_id'])) {
+                $loyalityPointsEarned = 5;
+                $stmt = $db->prepare("INSERT INTO loyalty_points (user_id, points) VALUES (?, ?)");
+                $stmt->execute([(int) $request['owner_user_id'], $loyalityPointsEarned]);
+            }
         }
 
+        $reviewerUserId = $_SESSION['user_id'] ?? null;
         $stmt = $db->prepare("
-            UPDATE vet_requests
-            SET status = ?, reviewed_by = ?, reviewed_at = NOW()
-            WHERE id = ?
+        UPDATE vet_requests
+        SET status = ?, reviewed_by = ?, reviewed_at = NOW()
+        WHERE id = ?
         ");
-        $stmt->execute([$resolution, $vetId ?: null, $requestId]);
+        $stmt->execute([$resolution, $reviewerUserId, $requestId]);
 
         return ['Vet request updated successfully.', []];
     }
 
-    private function handleRequestHealthRecord($db, $vetId) {
+    private function handleRequestHealthRecord($db, $vetId)
+    {
         $requestId = (int) ($_POST['request_id'] ?? 0);
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $title = trim($_POST['title'] ?? '');
@@ -1218,29 +1275,42 @@ class ClinicalController extends Controller {
             return [null, ['Please provide a title and notes for the health record.']];
         }
 
+        $request = $this->fetchOne($db, "SELECT request_type FROM vet_requests WHERE id = ?", [$requestId]);
+        if (($request['request_type'] ?? '') === 'chronic_alert' && stripos($title, 'chronic') === false) {
+            $title = 'Chronic - ' . $title;
+        }
+
         $stmt = $db->prepare("
             INSERT INTO health_records (pet_id, title, description, record_date)
             VALUES (?, ?, ?, CURDATE())
         ");
         $stmt->execute([$petId, $title, $description]);
 
+        if (($request['request_type'] ?? '') === 'chronic_alert') {
+            $stmt = $db->prepare("UPDATE pets SET medical_notes = ? WHERE id = ?");
+            $stmt->execute([$description, $petId]);
+        }
+
         $stmt = $db->prepare("
             UPDATE vet_requests
             SET status = 'completed', reviewed_by = ?, reviewed_at = NOW()
             WHERE id = ?
         ");
-        $stmt->execute([$vetId ?: null, $requestId]);
+        $reviewerUserId = $_SESSION['user_id'] ?? null;
+        $stmt->execute([$reviewerUserId, $requestId]);
 
         return ['Health record added and request completed.', []];
     }
 
-    private function fetchOne($db, $sql, $params = []) {
+    private function fetchOne($db, $sql, $params = [])
+    {
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    private function fetchAll($db, $sql, $params = []) {
+    private function fetchAll($db, $sql, $params = [])
+    {
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
