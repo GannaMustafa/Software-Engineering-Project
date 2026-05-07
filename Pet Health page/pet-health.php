@@ -44,6 +44,35 @@ function createVetRequest(PDO $connect, int $petId, ?int $ownerUserId, string $r
   $stmt->execute([$petId, $ownerUserId, $requestType, $title, $description, $priority, $relatedType, $relatedId, $destinationCountry]);
 }
 
+function createUserNotification(PDO $connect, ?int $userId, string $title, string $message, string $type): void
+{
+  if (!$userId) {
+    return;
+  }
+
+  $check = $connect->prepare("
+    SELECT id
+    FROM notifications
+    WHERE user_id = ?
+      AND title = ?
+      AND message = ?
+      AND type = ?
+      AND DATE(created_at) = CURDATE()
+    LIMIT 1
+  ");
+  $check->execute([$userId, $title, $message, $type]);
+
+  if ($check->fetchColumn()) {
+    return;
+  }
+
+  $stmt = $connect->prepare("
+    INSERT INTO notifications (user_id, title, message, type, is_read)
+    VALUES (?, ?, ?, ?, 0)
+  ");
+  $stmt->execute([$userId, $title, $message, $type]);
+}
+
 
 if (!isset($_SESSION['user_id'])) {
   header("Location: ../Paw Hubs/public/index.php?url=auth/login");
@@ -262,6 +291,20 @@ if ($selected_pet) {
       break;
     }
   }
+
+  foreach ($vaccines as $vaccine) {
+    $badge = $vaccine['status_badge'] ?? '';
+    if (in_array($badge, ['due', 'over'], true)) {
+      $isOverdue = $badge === 'over';
+      createUserNotification(
+        $connect,
+        $user_id,
+        $isOverdue ? 'Vaccination overdue' : 'Vaccination due soon',
+        ($selected_pet['name'] ?? 'Your pet') . ' has ' . ($vaccine['vaccine_name'] ?? 'a vaccine') . ' ' . strtolower($vaccine['status_text'] ?? 'due soon') . '.',
+        $isOverdue ? 'vaccine_overdue' : 'vaccine_due'
+      );
+    }
+  }
 }
 
 $vaccineTypes = [
@@ -292,9 +335,9 @@ $upcomingVaccinesCount = count(array_filter($vaccines, function ($vaccine) {
 $stmt = $connect->prepare("SELECT COALESCE(SUM(points), 0) FROM loyalty_points WHERE user_id = ?");
 $stmt->execute([$user_id]);
 $databaseLoyaltyPoints = (int) $stmt->fetchColumn();
-$vaccineScore = $totalVaccinesCount > 0 ? (int) round(($completedVaccinesCount / $totalVaccinesCount) * 100) : 0;
 $loyalityPoints = $databaseLoyaltyPoints;
-$healthScore = min(100, $vaccineScore + min(20, $loyalityPoints));
+$nextRewardPoints = 1500;
+$healthScore = min(100, (int) round(($loyalityPoints / $nextRewardPoints) * 100));
 
 $passportApproved = in_array($passportStatus, ['approved', 'completed'], true);
 $passportStatusText = $passportRequest ? ucfirst($passportStatus) : 'Not requested';
@@ -303,7 +346,7 @@ if ($passportApproved) {
 }
 $tapewormStatus = passportRequirementText($connect, $selected_pet, $passportDestination, 'tapeworm_treatment_required', 'Required for destination', 'Not required');
 $passportDocUrl = $passportApproved
-  ? ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . strtok($_SERVER['REQUEST_URI'] ?? '', '?') . '?pet_id=' . urlencode((string) ($selected_pet['id'] ?? '')) . '&passport_doc=' . urlencode((string) $passportNumber))
+  ? ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . strtok($_SERVER['REQUEST_URI'] ?? '', '?') . '?pet_id=' . urlencode((string) ($selected_pet['id'] ?? '')) . '&passport_doc=' . urlencode((string) $passportNumber) . '&print=1')
   : '';
 
 
@@ -625,6 +668,21 @@ if ($selected_pet) {
     if ($current !== null && $avgVal > 0) {
       $percentChange = (($current - $avgVal) / $avgVal) * 100;
       $trends[$avg['metric_type']] = round($percentChange, 1);
+
+      if ($percentChange >= 25) {
+        $metricLabels = [
+          'water_intake' => 'water intake',
+          'insulin' => 'insulin',
+          'mobility_score' => 'mobility score'
+        ];
+        createUserNotification(
+          $connect,
+          $user_id,
+          'Daily log higher than usual',
+          ($selected_pet['name'] ?? 'Your pet') . "'s " . ($metricLabels[$avg['metric_type']] ?? $avg['metric_type']) . ' is ' . round($percentChange, 1) . '% higher than the 7-day average.',
+          'daily_log_high'
+        );
+      }
     }
   }
 }
@@ -688,14 +746,12 @@ if ($selected_pet) {
 }
 
 if ($selected_pet && $alert) {
-  createVetRequest(
+  createUserNotification(
     $connect,
-    (int) $selected_pet['id'],
     $user_id,
-    'chronic_alert',
-    'Chronic condition alert',
-    'Sudden weight ' . ($alert['type'] === 'gain' ? 'gain' : 'loss') . ' detected: ' . $alert['value'] . '% in ' . $alert['days'] . ' days (' . $alert['old'] . ' to ' . $alert['new'] . ' kg). Vet should review chronic condition risk and add medical guidance.',
-    'urgent'
+    'Weight change alert',
+    'Sudden weight ' . ($alert['type'] === 'gain' ? 'gain' : 'loss') . ' detected for ' . ($selected_pet['name'] ?? 'your pet') . ': ' . $alert['value'] . '% in ' . $alert['days'] . ' days (' . $alert['old'] . ' to ' . $alert['new'] . ' kg).',
+    'weight_alert'
   );
 }
 
@@ -770,7 +826,7 @@ if ($selected_pet && $alert) {
           </li>
         <?php } ?>
         <li>
-          <a class="dropdown-item text-center text-brand fw-semibold py-2" href="#" id="addPetBtn">
+          <a class="dropdown-item text-center text-brand fw-semibold py-2" href="<?= htmlspecialchars(app_url('home/index', 'my-pets')) ?>" id="addPetBtn">
             <i class="bi bi-plus-circle me-1"></i> Add New Pet
           </a>
         </li>
@@ -865,7 +921,7 @@ if ($selected_pet && $alert) {
         </div>
         <div class="text-center">
           <div class="health-score" style="--score: <?= (int) $healthScore ?>%;"><span><?= (int) $healthScore ?>%</span></div>
-          <div class="small text-muted mt-2">Health Score</div>
+          <div class="small text-muted mt-2">Health Points</div>
         </div>
         <div class="d-none d-md-flex flex-column gap-2">
           <button class="btn-brand" data-bs-toggle="modal" data-bs-target="#logEntryModal">
@@ -1288,9 +1344,7 @@ if ($selected_pet && $alert) {
 
               <aside class="passport-qr-panel">
                 <div id="passportQrCode" data-doc-url="<?= htmlspecialchars($passportDocUrl) ?>"></div>
-                <a class="btn-ghost w-100 text-center text-decoration-none mt-3" href="<?= htmlspecialchars($passportDocUrl) ?>" target="_blank" rel="noopener">
-                  <i class="bi bi-box-arrow-up-right"></i> View docs link
-                </a>
+
                 <button class="btn-brand w-100 mt-2" type="button" onclick="setTimeout(() => window.print(), 300)">
                   <i class="bi bi-printer"></i> Print / Save PDF
                 </button>
@@ -1497,6 +1551,25 @@ if ($selected_pet && $alert) {
         fallback.textContent = 'Open passport documents';
         fallback.target = '_blank';
         qrTarget.appendChild(fallback);
+      }
+    });
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('print') === '1') {
+        const modal = document.getElementById('passportDocsModal');
+        if (modal) {
+          modal.classList.remove('fade');
+          modal.classList.add('show');
+          modal.style.display = 'block';
+          modal.style.opacity = '1';
+          modal.style.visibility = 'visible';
+          modal.style.position = 'static';
+          modal.style.transform = 'none';
+          modal.setAttribute('aria-hidden', 'false');
+        }
+        setTimeout(() => window.print(), 200);
       }
     });
   </script>

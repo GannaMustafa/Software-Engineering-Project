@@ -860,7 +860,7 @@ if (!empty($_SESSION['user_id'])) {
         </button>
       </div>
     </div>
-بلا
+
     <!-- MY ORDERS -->
     <h3 class="section-title" style="margin-top:44px;">
       <span class="dot" style="background:var(--sky);"></span>
