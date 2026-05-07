@@ -105,21 +105,22 @@ class Database
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-        CREATE TABLE IF NOT EXISTS `pets` (
-          `id` int(11) NOT NULL AUTO_INCREMENT,
-          `owner_id` int(11) NOT NULL,
-          `name` varchar(50) NOT NULL,
-          `species` varchar(50) NOT NULL,
-          `breed` varchar(100) DEFAULT '',
-          `age` int(11) NOT NULL,
-          `gender` varchar(20) DEFAULT 'Unknown',
-          `weight` decimal(5,2) NOT NULL DEFAULT 0.00,
-          `color` varchar(50) DEFAULT '',
-          `medical_notes` text,
-          `vaccination_status` varchar(50) DEFAULT 'Unknown',
-          `image` varchar(255) DEFAULT 'default-pet.png',
-          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-          PRIMARY KEY (`id`)
+        CREATE TABLE IF NOT EXISTS pets (
+          id int(11) NOT NULL AUTO_INCREMENT,
+          owner_id int(11) NOT NULL,
+          name varchar(50) NOT NULL,
+          species varchar(50) NOT NULL,
+          breed varchar(100) DEFAULT '',
+          age int(11) NOT NULL,
+          gender varchar(20) DEFAULT 'Unknown',
+          weight decimal(5,2) NOT NULL DEFAULT 0.00,
+          color varchar(50) DEFAULT '',
+          medical_notes text,
+          allergies text DEFAULT NULL,
+          vaccination_status varchar(50) DEFAULT 'Unknown',
+          image varchar(255) DEFAULT 'default-pet.png',
+          created_at timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
         CREATE TABLE IF NOT EXISTS `medical_procedures` (
@@ -453,6 +454,7 @@ class Database
         $this->addColumnIfMissing('pets', 'gender', "`gender` varchar(20) DEFAULT 'Unknown' AFTER `age`");
         $this->addColumnIfMissing('pets', 'weight', "`weight` decimal(5,2) NOT NULL DEFAULT 0.00 AFTER `gender`");
         $this->addColumnIfMissing('pets', 'color', "`color` varchar(50) DEFAULT '' AFTER `weight`");
+        $this->addColumnIfMissing('pets', 'allergies', "allergies text DEFAULT NULL AFTER medical_notes");
         $this->addColumnIfMissing('pets', 'medical_notes', "`medical_notes` text AFTER `color`");
         $this->addColumnIfMissing('pets', 'vaccination_status', "`vaccination_status` varchar(50) DEFAULT 'Unknown' AFTER `medical_notes`");
         $this->addColumnIfMissing('pets', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `image`");
