@@ -63,6 +63,12 @@
         .feed-item { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: #fff; }
         .feed-item strong { display: block; margin-bottom: 4px; }
         .feed-item p { margin: 0; color: var(--muted); line-height: 1.5; }
+        .request-item { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: #fff; display: grid; gap: 12px; }
+        .request-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+        .request-type { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0; }
+        .request-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .mini-form { display: grid; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
+        .mini-form input,.mini-form textarea { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; background: var(--soft); color: var(--ink); }
         .empty { min-height: 120px; display: grid; place-items: center; border: 1px dashed var(--line); border-radius: 14px; color: var(--muted); background: var(--soft); text-align: center; padding: 16px; }
         @media (max-width: 1150px) { body { padding: 16px; } .app-frame { grid-template-columns: 1fr; } .sidebar { display: none; } .stats,.hero,.grid { grid-template-columns: 1fr; } }
         @media (max-width: 640px) { .content { padding: 16px; } .topbar,.page-head { align-items: stretch; flex-direction: column; } }
@@ -71,6 +77,7 @@
 <body>
 <?php
 $workflowRequests = $workflowRequests ?? [];
+$vetRequests = $vetRequests ?? [];
 $incomingLabStats = $incomingLabStats ?? ['new' => 0, 'critical' => 0, 'uninterpreted' => 0];
 ?>
 <div class="app-frame">
@@ -96,7 +103,7 @@ $incomingLabStats = $incomingLabStats ?? ['new' => 0, 'critical' => 0, 'uninterp
     <main class="content">
         <div class="topbar">
             <label class="search"><i class="fas fa-search"></i><input type="search" placeholder="Search dashboard summaries"></label>
-            <a class="action-btn" href="index.php?url=admin/approvals"><i class="fas fa-user-check"></i> Approval Queue</a>
+            <a class="action-btn" href="#vet-requests"><i class="fas fa-user-check"></i> Approval Queue</a>
         </div>
 
         <header class="page-head">
@@ -129,8 +136,76 @@ $incomingLabStats = $incomingLabStats ?? ['new' => 0, 'critical' => 0, 'uninterp
             <article class="stat-card"><div class="stat-icon bg-teal"><i class="fas fa-briefcase-medical"></i></div><div><span>Procedures</span><strong><?= (int) ($stats['procedures'] ?? 0) ?></strong></div></article>
             <article class="stat-card"><div class="stat-icon bg-green"><i class="fas fa-vial"></i></div><div><span>Lab Reports</span><strong><?= (int) ($stats['lab_reports'] ?? 0) ?></strong></div></article>
             <article class="stat-card"><div class="stat-icon bg-olive"><i class="fas fa-share-nodes"></i></div><div><span>Referrals</span><strong><?= (int) ($stats['referrals'] ?? 0) ?></strong></div></article>
+            <article class="stat-card"><div class="stat-icon bg-sky"><i class="fas fa-bell"></i></div><div><span>Pet Health Alerts</span><strong><?= (int) ($stats['vet_requests'] ?? 0) ?></strong></div></article>
             <article class="stat-card"><div class="stat-icon bg-olive"><i class="fas fa-user-clock"></i></div><div><span>Pending Owner</span><strong><?= (int) ($stats['pending_owner'] ?? 0) ?></strong></div></article>
             <article class="stat-card"><div class="stat-icon bg-sky"><i class="fas fa-user-shield"></i></div><div><span>Pending Admin</span><strong><?= (int) ($stats['pending_admin'] ?? 0) ?></strong></div></article>
+        </section>
+
+        <section class="grid" id="vet-requests">
+            <article class="panel" style="grid-column: 1 / -1;">
+                <div class="panel-head">
+                    <div>
+                        <h2>Pet Health Approval Queue</h2>
+                        <small>Chronic alerts, passport requests, vaccination completion, and microchip surgery</small>
+                    </div>
+                    <span class="badge"><?= count($vetRequests) ?> pending</span>
+                </div>
+
+                <?php if (empty($vetRequests)): ?>
+                    <div class="empty">No pet health requests need vet attention.</div>
+                <?php else: ?>
+                    <div class="feed">
+                        <?php foreach ($vetRequests as $request): ?>
+                            <div class="request-item">
+                                <div class="request-top">
+                                    <div>
+                                        <div class="request-type"><?= htmlspecialchars(str_replace('_', ' ', $request['request_type'] ?? 'request')) ?></div>
+                                        <strong><?= htmlspecialchars($request['title'] ?? 'Vet request') ?></strong>
+                                        <p class="meta">
+                                            <?= htmlspecialchars($request['pet_name'] ?? 'Unknown pet') ?>
+                                            <?php if (!empty($request['species'])): ?> · <?= htmlspecialchars($request['species']) ?><?php endif; ?>
+                                            <?php if (!empty($request['owner_name'])): ?> · owner: <?= htmlspecialchars($request['owner_name']) ?><?php endif; ?>
+                                            <?php if (!empty($request['destination_country'])): ?> · destination: <?= htmlspecialchars($request['destination_country']) ?><?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <span class="badge"><?= htmlspecialchars($request['priority'] ?? 'normal') ?></span>
+                                </div>
+                                <p><?= htmlspecialchars($request['description'] ?? '') ?></p>
+
+                                <div class="request-actions">
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="resolve_vet_request">
+                                        <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                                        <input type="hidden" name="resolution" value="<?= ($request['request_type'] ?? '') === 'vaccination_completion' ? 'completed' : 'approved' ?>">
+                                        <button class="action-btn" type="submit">
+                                            <i class="fas fa-check"></i>
+                                            <?= ($request['request_type'] ?? '') === 'vaccination_completion' ? 'Complete Vaccination' : 'Approve' ?>
+                                        </button>
+                                    </form>
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="resolve_vet_request">
+                                        <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                                        <input type="hidden" name="resolution" value="rejected">
+                                        <button class="action-btn" type="submit"><i class="fas fa-xmark"></i> Reject</button>
+                                    </form>
+                                    <?php if (($request['request_type'] ?? '') === 'microchip_surgery'): ?>
+                                        <a class="action-btn" href="index.php?url=clinical/surgeryManager"><i class="fas fa-briefcase-medical"></i> Surgery Manager</a>
+                                    <?php endif; ?>
+                                </div>
+
+                                <form method="POST" class="mini-form">
+                                    <input type="hidden" name="action" value="add_request_health_record">
+                                    <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>">
+                                    <input type="hidden" name="pet_id" value="<?= (int) $request['pet_id'] ?>">
+                                    <input type="text" name="title" placeholder="Health record title">
+                                    <textarea name="description" rows="2" placeholder="Vet notes, findings, passport document review, or follow-up plan"></textarea>
+                                    <button class="action-btn" type="submit"><i class="fas fa-notes-medical"></i> Add Health Record</button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </article>
         </section>
 
         <section class="grid">

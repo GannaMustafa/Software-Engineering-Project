@@ -75,6 +75,10 @@ class ClinicalController extends Controller {
                 [$message, $errors] = $this->handleLabInterpretation($db, $vetId);
             } elseif ($action === 'transfer_referral_case') {
                 [$message, $errors] = $this->handleReferralTransfer($db, $vetId);
+            } elseif ($action === 'resolve_vet_request') {
+                [$message, $errors] = $this->handleVetRequestResolution($db, $vetId);
+            } elseif ($action === 'add_request_health_record') {
+                [$message, $errors] = $this->handleRequestHealthRecord($db, $vetId);
             }
         }
 
@@ -83,6 +87,7 @@ class ClinicalController extends Controller {
         $referrals = $this->referrals($db, $vetId);
         $auditLogs = $this->auditLogs($db, $vetId, $role, 5);
         $workflowRequests = $this->vetWorkflowRequests($db, $vetId);
+        $vetRequests = $this->vetRequests($db);
         $permissions = $this->vetPermissions($db, $vetId);
         $stats = [
             'procedures' => $this->countRows($db, 'medical_procedures', $vetId ? 'vet_id = ?' : null, $vetId ? [$vetId] : []),
@@ -90,6 +95,8 @@ class ClinicalController extends Controller {
             'referrals' => $this->countReferrals($db, $vetId),
             'audit_logs' => count($auditLogs),
             'workflow_requests' => count($workflowRequests),
+            'vet_requests' => count($vetRequests),
+            'urgent_vet_requests' => count(array_filter($vetRequests, fn($request) => strtolower($request['priority'] ?? '') === 'urgent')),
             'pending_admin' => count(array_filter($workflowRequests, fn($request) => strtolower($request['admin_status'] ?? '') === 'pending')),
             'pending_owner' => count(array_filter($workflowRequests, fn($request) => strtolower($request['owner_status'] ?? '') === 'pending'))
         ];
@@ -98,6 +105,7 @@ class ClinicalController extends Controller {
             'role' => $role,
             'stats' => $stats,
             'workflowRequests' => $workflowRequests,
+            'vetRequests' => $vetRequests,
             'incomingLabStats' => $this->incomingLabStats($labReports),
             'message' => $message,
             'errors' => $errors
@@ -1153,6 +1161,77 @@ class ClinicalController extends Controller {
              ORDER BY al.created_at DESC, al.id DESC
              LIMIT 8"
         );
+    }
+
+    private function vetRequests($db) {
+        return $this->fetchAll(
+            $db,
+            "SELECT vr.*, p.name AS pet_name, p.species, u.username AS owner_name
+             FROM vet_requests vr
+             LEFT JOIN pets p ON p.id = vr.pet_id
+             LEFT JOIN users u ON u.id = vr.owner_user_id
+             WHERE vr.status = 'pending'
+             ORDER BY
+               CASE WHEN vr.priority = 'urgent' THEN 0 ELSE 1 END,
+               vr.created_at DESC,
+               vr.id DESC
+             LIMIT 10"
+        );
+    }
+
+    private function handleVetRequestResolution($db, $vetId) {
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $resolution = $_POST['resolution'] ?? 'approved';
+        $allowed = ['approved', 'completed', 'rejected'];
+
+        if ($requestId <= 0 || !in_array($resolution, $allowed, true)) {
+            return [null, ['Invalid vet request action.']];
+        }
+
+        $request = $this->fetchOne($db, "SELECT * FROM vet_requests WHERE id = ?", [$requestId]);
+        if (!$request) {
+            return [null, ['Vet request was not found.']];
+        }
+
+        if ($resolution === 'completed' && ($request['related_type'] ?? '') === 'vaccine' && !empty($request['related_id'])) {
+            $stmt = $db->prepare("UPDATE vaccines SET status = 'completed' WHERE id = ?");
+            $stmt->execute([(int) $request['related_id']]);
+        }
+
+        $stmt = $db->prepare("
+            UPDATE vet_requests
+            SET status = ?, reviewed_by = ?, reviewed_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$resolution, $vetId ?: null, $requestId]);
+
+        return ['Vet request updated successfully.', []];
+    }
+
+    private function handleRequestHealthRecord($db, $vetId) {
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $petId = (int) ($_POST['pet_id'] ?? 0);
+        $title = trim($_POST['title'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+
+        if ($requestId <= 0 || $petId <= 0 || $title === '' || $description === '') {
+            return [null, ['Please provide a title and notes for the health record.']];
+        }
+
+        $stmt = $db->prepare("
+            INSERT INTO health_records (pet_id, title, description, record_date)
+            VALUES (?, ?, ?, CURDATE())
+        ");
+        $stmt->execute([$petId, $title, $description]);
+
+        $stmt = $db->prepare("
+            UPDATE vet_requests
+            SET status = 'completed', reviewed_by = ?, reviewed_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$vetId ?: null, $requestId]);
+
+        return ['Health record added and request completed.', []];
     }
 
     private function fetchOne($db, $sql, $params = []) {
