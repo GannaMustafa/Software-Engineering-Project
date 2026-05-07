@@ -13,6 +13,7 @@ if (!function_exists('asset')) {
   }
 }
 
+$pets = [];
 $selectedPet = null;
 
 if (!empty($_SESSION['user_id'])) {
@@ -24,11 +25,29 @@ if (!empty($_SESSION['user_id'])) {
     $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
 
     if ($owner) {
-      $petStmt = $db->prepare("SELECT * FROM pets WHERE owner_id = ? ORDER BY id DESC LIMIT 1");
+      $petStmt = $db->prepare("SELECT * FROM pets WHERE owner_id = ? ORDER BY id DESC");
       $petStmt->execute([$owner['id']]);
-      $selectedPet = $petStmt->fetch(PDO::FETCH_ASSOC);
+      $pets = $petStmt->fetchAll(PDO::FETCH_ASSOC);
+
+      $selectedPetId = (int)($_GET['pet_id'] ?? $_SESSION['marketplace_pet_id'] ?? 0);
+
+      foreach ($pets as $pet) {
+        if ((int)$pet['id'] === $selectedPetId) {
+          $selectedPet = $pet;
+          break;
+        }
+      }
+
+      if (!$selectedPet && !empty($pets)) {
+        $selectedPet = $pets[0];
+      }
+
+      if ($selectedPet) {
+        $_SESSION['marketplace_pet_id'] = $selectedPet['id'];
+      }
     }
   } catch (Exception $e) {
+    $pets = [];
     $selectedPet = null;
   }
 }
@@ -36,12 +55,43 @@ if (!empty($_SESSION['user_id'])) {
 $petName = $selectedPet['name'] ?? 'Your pet';
 $petAge = isset($selectedPet['age']) ? $selectedPet['age'] . ' yrs' : 'Age not added';
 $petSpecies = $selectedPet['species'] ?? 'Pet';
-$petImage = !empty($selectedPet['image']) && $selectedPet['image'] !== 'default.png'
-  ? asset('uploads/' . $selectedPet['image'])
-  : asset('images/guest.png');
-$petWeight = isset($selectedPet['weight_kg']) && (int)$selectedPet['weight_kg'] > 0
-  ? $selectedPet['weight_kg'] . ' kg'
+$petImageName = basename(trim((string)($selectedPet['image'] ?? '')));
+$petImage = $petImageName !== '' && $petImageName !== 'default.png' && $petImageName !== 'default-pet.png'
+  ? asset('uploads/pets/' . $petImageName)
+  : asset('uploads/pets/default-pet.png');
+
+$petWeight = isset($selectedPet['weight']) && (float)$selectedPet['weight'] > 0
+  ? rtrim(rtrim(number_format((float)$selectedPet['weight'], 2), '0'), '.') . ' kg'
   : '';
+
+$petAllergiesText = strtolower((string)($selectedPet['allergies'] ?? ''));
+$petAllergies = array_filter(array_map('trim', explode(',', $petAllergiesText)));
+
+function productAllergyAlert(array $petAllergies, array $ingredients, string $petName)
+{
+  $matches = [];
+
+  foreach ($petAllergies as $allergy) {
+    foreach ($ingredients as $ingredient) {
+      if ($allergy !== '' && stripos($ingredient, $allergy) !== false) {
+        $matches[] = $allergy;
+      }
+    }
+  }
+
+  $matches = array_unique($matches);
+
+  if (!empty($matches)) {
+    return '<div class="allergy-alert"><i class="bi bi-exclamation-triangle-fill" style="color:#c97a1a;"></i><span><b>Allergy alert:</b> contains <u>' .
+      htmlspecialchars(implode(', ', $matches)) .
+      '</u> — listed in ' . htmlspecialchars($petName) . '\'s allergies.</span></div>';
+  }
+
+  return '<div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Safe for ' .
+    htmlspecialchars($petName) .
+    ' — no allergens detected</div>';
+}
+
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout') {
   header('Content-Type: application/json');
@@ -81,7 +131,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
 
     $totalPrice = 0;
     $earnedPoints = 0;
-    $orderIds = [];
+    $autoShipProductNames = [
+      'Adult Dry Food 1kg',
+      'Oatmeal Gentle Shampoo',
+      'Training Pads (50pk)'
+    ];
 
     foreach ($items as $item) {
       $qty = max(1, (int) ($item['qty'] ?? 1));
@@ -107,15 +161,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
 
     $remainingPointsCredit = $pointsCreditUsed;
 
+    $hasAutoShip = false;
+
+    foreach ($items as $item) {
+      $name = trim($item['name'] ?? '');
+
+      if (in_array($name, $autoShipProductNames, true)) {
+        $hasAutoShip = true;
+        break;
+      }
+    }
+
+
+    $deliveryDate = $hasAutoShip
+      ? date('Y-m-d', strtotime('+30 days'))
+      : date('Y-m-d', strtotime('+3 days'));
+
+    $finalTotalPrice = max(0, $totalPrice - $pointsCreditUsed);
+
     $orderStmt = $db->prepare("
-  INSERT INTO orders (owner_id, vendor_id, total_price, is_recurring, delivery_date)
-  VALUES (?, ?, ?, ?, ?)
-");
+      INSERT INTO orders (owner_id, vendor_id, total_price, is_recurring, delivery_date)
+      VALUES (?, ?, ?, ?, ?)
+    ");
+
+    $orderStmt->execute([
+      $ownerId,
+      $vendorId,
+      $finalTotalPrice,
+      $hasAutoShip ? 1 : 0,
+      $deliveryDate
+    ]);
+
+    $orderId = (int) $db->lastInsertId();
 
     $itemStmt = $db->prepare("
-  INSERT INTO order_items (order_id, product_name, price, quantity, availability_status, points)
-  VALUES (?, ?, ?, ?, 'pending', ?)
-");
+      INSERT INTO order_items (order_id, product_name, price, quantity, availability_status, points)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    ");
 
     foreach ($items as $item) {
       $name = trim($item['name'] ?? '');
@@ -123,35 +205,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
       $price = (float) ($item['price'] ?? 0);
       $pts = (int) ($item['pts'] ?? 0);
       $taskPts = (int) ($item['taskPoints'] ?? 0);
-      $badge = strtolower($item['badge'] ?? '');
-      $isAutoShip = !empty($item['isAutoShip']) || $badge === 'sub';
 
       if ($name === '') {
         continue;
       }
-
-      $itemTotal = $price * $qty;
-
-      if ($remainingPointsCredit > 0) {
-        $creditForItem = min($remainingPointsCredit, $itemTotal);
-        $itemTotal = max(0, $itemTotal - $creditForItem);
-        $remainingPointsCredit -= $creditForItem;
-      }
-
-      $deliveryDate = $isAutoShip
-        ? date('Y-m-d', strtotime('+30 days'))
-        : date('Y-m-d', strtotime('+3 days'));
-
-      $orderStmt->execute([
-        $ownerId,
-        $vendorId,
-        $itemTotal,
-        $isAutoShip ? 1 : 0,
-        $deliveryDate
-      ]);
-
-      $orderId = (int) $db->lastInsertId();
-      $orderIds[] = $orderId;
 
       $itemStmt->execute([
         $orderId,
@@ -177,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
 
     echo json_encode([
       'ok' => true,
-      'order_id' => implode(', ', $orderIds),
+      'order_id' => $orderId,
       'earned_points' => $earnedPoints
     ]);
     exit;
@@ -268,6 +325,7 @@ if (!empty($_SESSION['user_id'])) {
         INNER JOIN order_items oi ON oi.order_id = o.id
         WHERE o.owner_id = ?
           AND o.is_recurring = 1
+          AND oi.product_name IN ('Adult Dry Food 1kg', 'Oatmeal Gentle Shampoo', 'Training Pads (50pk)')
         GROUP BY oi.product_name
         ORDER BY MIN(o.delivery_date) ASC
         LIMIT 20
@@ -318,21 +376,62 @@ if (!empty($_SESSION['user_id'])) {
             built in.</p>
         </div>
         <div class="col-md-5">
-          <div class="pet-pill">
-            <div class="pet-photo">
-              <img src="<?= htmlspecialchars($petImage) ?>" alt="<?= htmlspecialchars($petName) ?>"
-                style="width:55px; height:55px; border-radius:50%; object-fit:cover;">
-            </div>
-            <div>
-              <div style="font-weight:700;">
-                Shopping for: <?= htmlspecialchars($petName) ?>
+          <details class="pet-picker">
+            <summary class="pet-pill">
+              <div class="pet-photo">
+                <img src="<?= htmlspecialchars($petImage) ?>" alt="<?= htmlspecialchars($petName) ?>"
+                  onerror="this.onerror=null;this.src='<?= htmlspecialchars(asset('uploads/pets/default-pet.png')) ?>';">
               </div>
-              <small style="opacity:.85;">
-                <?= htmlspecialchars($petAge) ?> • <?= htmlspecialchars($petSpecies) ?> • <?= htmlspecialchars($petWeight) ?>
-              </small>
-            </div>
-          </div>
 
+              <div class="pet-pill-info">
+                <div class="pet-pill-label">Shopping for:</div>
+                <div class="pet-pill-name"><?= htmlspecialchars($petName) ?></div>
+                <small>
+                  <?= htmlspecialchars($petAge) ?> • <?= htmlspecialchars($petSpecies) ?><?= $petWeight ? ' • ' . htmlspecialchars($petWeight) : '' ?>
+                </small>
+              </div>
+              <i class="fas fa-chevron-down"></i>
+            </summary>
+
+            <div class="pet-picker-menu">
+              <div class="pet-picker-title">My Pets</div>
+
+              <?php if (!empty($pets)): ?>
+                <?php foreach ($pets as $pet): ?>
+                  <?php
+                  $optionImageName = basename(trim((string)($pet['image'] ?? '')));
+                  $optionImage = $optionImageName !== '' && $optionImageName !== 'default.png'
+                    ? asset('uploads/pets/' . $optionImageName)
+                    : asset('uploads/pets/default-pet.png');
+
+                  $optionAge = isset($pet['age']) ? $pet['age'] . ' yrs' : 'Age not added';
+                  $optionSpecies = $pet['species'] ?? 'Pet';
+                  $isActivePet = $selectedPet && (int)$selectedPet['id'] === (int)$pet['id'];
+                  ?>
+
+                  <a class="pet-picker-option <?= $isActivePet ? 'active' : '' ?>" href="?pet_id=<?= (int)$pet['id'] ?>">
+                    <img src="<?= htmlspecialchars($optionImage) ?>" alt="<?= htmlspecialchars($pet['name']) ?>"
+                      onerror="this.onerror=null;this.src='<?= htmlspecialchars(asset('uploads/pets/default-pet.png')) ?>';">
+
+                    <span>
+                      <strong><?= htmlspecialchars($pet['name']) ?></strong>
+                      <small><?= htmlspecialchars($optionSpecies) ?> • <?= htmlspecialchars($optionAge) ?></small>
+                    </span>
+
+                    <?php if ($isActivePet): ?>
+                      <em>Active</em>
+                    <?php endif; ?>
+                  </a>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <div class="pet-picker-empty">No pets added yet</div>
+              <?php endif; ?>
+
+              <a class="pet-picker-add" href="../Paw Hubs/public/index.php?url=user/profile">
+                + Add New Pet
+              </a>
+            </div>
+          </details>
         </div>
       </div>
     </div>
@@ -444,8 +543,7 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Joint Support Chews</h5>
             <div class="brand">VetPlus Mobility</div>
             <div class="price">EGP 1,275 <small>EGP 1,500</small></div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Safe for Milo — no allergens detected
-            </div>
+            <?= productAllergyAlert($petAllergies, ['glucosamine', 'chondroitin', 'chicken flavor'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Joint Support Chews"
                 data-brand="VetPlus Mobility" data-price="1275" data-old="1500" data-bg="bg-sand"
                 data-badge="vet" data-badge-label="VET -15%" data-pts="26"><i class="bi bi-cart-plus"></i> Add to
@@ -462,17 +560,13 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Chicken Crunchy Treats</h5>
             <div class="brand">PawSnacks Co.</div>
             <div class="price">EGP 450</div>
-            <div class="allergy-alert"><i class="bi bi-exclamation-triangle-fill"
-                style="color:#c97a1a;"></i><span><b>Allergy alert:</b> contains <u>chicken</u> — listed in Milo's
-                allergies.</span></div>
-            <div class="mt-auto pt-3"><button class="btn-outline-soft add-to-cart-btn"
+            <?= productAllergyAlert($petAllergies, ['chicken', 'wheat', 'corn'], $petName) ?>
+            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn"
                 data-name="Chicken Crunchy Treats" data-brand="PawSnacks Co." data-price="450"
-                data-bg="bg-sky" data-badge="warn" data-badge-label="⚠ Allergen" data-pts="9">Acknowledge &
-                Continue</button></div>
+                data-bg="bg-sky" data-badge="warn" data-badge-label="Allergen" data-pts="9"><i class="bi bi-cart-plus"></i> Add to Cart</button></div>
           </div>
         </div>
       </div>
-
       <div class="col" data-category="therapeutic-diets auto-ship">
         <div class="product">
           <span class="badge-tag badge-sub"><i class="bi bi-arrow-repeat"></i> AUTO-SHIP</span>
@@ -481,7 +575,7 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Adult Dry Food 1kg</h5>
             <div class="brand">Royal Canin</div>
             <div class="price">EGP 260</div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Allergen-free for Milo</div>
+            <?= productAllergyAlert($petAllergies, ['chicken', 'rice', 'corn', 'wheat'], $petName) ?>
             <div class="mt-auto pt-3">
               <button class="btn-primary-soft add-to-cart-btn" data-name="Adult Dry Food 1kg" data-brand="Royal Canin"
                 data-price="260" data-bg="bg-green" data-badge="sub" data-badge-label="AUTO-SHIP"
@@ -502,7 +596,7 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Omega-3 Fish Oil</h5>
             <div class="brand">PetWell Naturals</div>
             <div class="price">EGP 1,000 <small>EGP 1,200</small></div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Safe for Milo</div>
+            <?= productAllergyAlert($petAllergies, ['fish oil', 'salmon', 'omega 3'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Omega-3 Fish Oil"
                 data-brand="PetWell Naturals" data-price="1000" data-old="1200" data-bg="bg-mint"
                 data-badge="vet" data-badge-label="VET PICK" data-pts="20" data-task-points="180"><i class="bi bi-cart-plus"></i> Add to
@@ -537,7 +631,7 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Oatmeal Gentle Shampoo</h5>
             <div class="brand">CleanCoat</div>
             <div class="price">EGP 710</div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Hypoallergenic</div>
+            <?= productAllergyAlert($petAllergies, ['oatmeal', 'aloe', 'fragrance'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn"
                 data-name="Oatmeal Gentle Shampoo" data-brand="CleanCoat" data-price="639" data-old="710"
                 data-bg="bg-sand" data-badge="sub" data-badge-label="AUTO-SHIP"
@@ -572,11 +666,10 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Dental Chew Sticks</h5>
             <div class="brand">FreshBite</div>
             <div class="price">EGP 540 <small>EGP 600</small></div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Wheat-free, safe for Milo</div>
+            <?= productAllergyAlert($petAllergies, ['beef', 'wheat', 'mint'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Dental Chew Sticks"
                 data-brand="FreshBite" data-price="540" data-old="600" data-bg="bg-mint"
-                data-badge="sub" data-badge-label="AUTO-SHIP"
-                data-auto-ship="1" data-pts="120">
+                data-badge="vet" data-badge-label="VET -10%" data-pts="120">
                 <i class="bi bi-cart-plus"></i> Add to
                 Cart</button>
             </div>
@@ -767,7 +860,7 @@ if (!empty($_SESSION['user_id'])) {
         </button>
       </div>
     </div>
-
+بلا
     <!-- MY ORDERS -->
     <h3 class="section-title" style="margin-top:44px;">
       <span class="dot" style="background:var(--sky);"></span>
@@ -805,9 +898,7 @@ if (!empty($_SESSION['user_id'])) {
 
   </div>
 
-  <?php require_once $pawHubsPath . '/app/views/partials/footer.php'; ?>
-  <?php require_once $pawHubsPath . '/app/views/partials/theme_toggle.php'; ?>
-  <div id="toast" class="toast-message"></div>
+  <?php require_once $pawHubsPath . '/app/views/partials/footer.php'; ?> <div id="toast" class="toast-message"></div>
   <script>
     window.POINTS_VALUE = <?= json_encode($pointsCredit) ?>;
   </script>

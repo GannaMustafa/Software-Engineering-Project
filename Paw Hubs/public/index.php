@@ -10,4 +10,3 @@ require_once '../app/core/Validator.php';
 require_once '../app/core/validation.php';
 
 $app = new App();
- 
