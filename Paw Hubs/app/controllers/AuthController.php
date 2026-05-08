@@ -2,14 +2,17 @@
 
 require_once '../app/services/AuthService.php';
 
-class AuthController extends Controller {
+class AuthController extends Controller
+{
     private $authService;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->authService = new AuthService();
     }
 
-    public function login() {
+    public function login()
+    {
         if (isset($_SESSION['user_id'])) {
             $this->refreshSessionUser($_SESSION['user_id']);
             $this->redirectBasedOnRole($_SESSION['role']);
@@ -47,7 +50,8 @@ class AuthController extends Controller {
         $this->view('auth/login', ['errors' => $errors]);
     }
 
-    public function register() {
+    public function register()
+    {
         if (isset($_SESSION['user_id']) && $_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirectBasedOnRole($_SESSION['role']);
         }
@@ -152,7 +156,8 @@ class AuthController extends Controller {
         $this->view('auth/register', ['errors' => $errors, 'old' => $old]);
     }
 
-    public function logout() {
+    public function logout()
+    {
         $_SESSION = [];
         session_unset();
         session_destroy();
@@ -160,11 +165,12 @@ class AuthController extends Controller {
         exit;
     }
 
-    private function redirectBasedOnRole($role) {
+    private function redirectBasedOnRole($role)
+    {
         $routes = [
             'admin' => 'admin/index',
             'vet' => 'clinical/index',
-            'service_provider' => 'home/index',
+            'service_provider' => 'vendor/index',
             'pet_owner' => 'home/index'
         ];
 
@@ -173,7 +179,8 @@ class AuthController extends Controller {
         exit;
     }
 
-    private function refreshSessionUser($userId) {
+    private function refreshSessionUser($userId)
+    {
         $userModel = new User();
         $user = $userModel->getById($userId);
 
@@ -184,7 +191,8 @@ class AuthController extends Controller {
         }
     }
 
-    private function insertNotification($userId, $title, $message, $type) {
+    private function insertNotification($userId, $title, $message, $type)
+    {
         try {
             $db = Database::getInstance()->getConnection();
             $stmt = $db->prepare(
@@ -196,7 +204,8 @@ class AuthController extends Controller {
         }
     }
 
-    private function uploadProfileImage($username) {
+    private function uploadProfileImage($username)
+    {
         if (!isset($_FILES['profile_image']) || $_FILES['profile_image']['error'] === UPLOAD_ERR_NO_FILE) {
             return ['filename' => null];
         }
@@ -253,7 +262,8 @@ class AuthController extends Controller {
         return ['filename' => $filename, 'path' => $targetPath];
     }
 
-    private function normalizePhone($phone) {
+    private function normalizePhone($phone)
+    {
         $phone = preg_replace('/[^\d+]/', '', trim($phone));
 
         if (str_starts_with($phone, '+20')) {
