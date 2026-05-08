@@ -563,7 +563,7 @@ $defaultPetImage = asset('images/guest.png');
             position: relative;
             overflow: hidden;
             border-radius: 40px;
-            height: 100%;
+            height: 90%;
             box-shadow: 0 26px 60px rgba(23, 50, 77, 0.12);
             background: linear-gradient(160deg, #f3ece3 0%, #fdf8f3 100%);
         }
@@ -653,8 +653,9 @@ $defaultPetImage = asset('images/guest.png');
 
         .marketplace-grid {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 22px;
+            width: 100%;
         }
 
         .market-card {
@@ -664,6 +665,9 @@ $defaultPetImage = asset('images/guest.png');
             box-shadow: 0 18px 36px rgba(28, 54, 74, 0.08);
             transition: transform 0.24s ease, box-shadow 0.24s ease;
             min-width: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
 
         .market-card:hover {
@@ -712,6 +716,9 @@ $defaultPetImage = asset('images/guest.png');
 
         .market-card-body {
             padding-top: 16px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .market-image-debug {
@@ -736,6 +743,25 @@ $defaultPetImage = asset('images/guest.png');
             min-height: 44px;
         }
 
+        .market-allergy-warning {
+            margin: 0 0 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #fff4df;
+            color: #9a5a12;
+            border: 1px solid #f1d29b;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.4;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .market-allergy-warning i {
+            margin-top: 2px;
+        }
+
         .market-rating {
             display: inline-flex;
             align-items: center;
@@ -750,7 +776,8 @@ $defaultPetImage = asset('images/guest.png');
         }
 
         .market-card-footer {
-            margin-top: 14px;
+            margin-top: auto;
+            padding-top: 18px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -764,15 +791,25 @@ $defaultPetImage = asset('images/guest.png');
         }
 
         .market-add {
-            width: 46px;
-            height: 46px;
-            border-radius: 16px;
+            min-height: 42px;
+            padding: 9px 16px;
+            border-radius: 12px;
             border: 0;
-            background: linear-gradient(135deg, #17B3A3 0%, #0f9789 100%);
+            background: #6BB5A8;
             color: #fff;
-            display: grid;
-            place-items: center;
-            box-shadow: 0 14px 28px rgba(23, 179, 163, 0.22);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: .88rem;
+            text-decoration: none;
+            transition: .2s;
+        }
+
+        .market-add:hover {
+            background: #5aa093;
+            color: #fff;
         }
 
         .features-band {
@@ -1368,7 +1405,65 @@ $defaultPetImage = asset('images/guest.png');
         'wellness_score' => 0,
         'loyalty_points' => 0
     ];
-    $recommendedProducts = isset($recommendedProducts) && is_array($recommendedProducts) ? $recommendedProducts : [];
+
+    $recommendedProducts = [
+        [
+            'name' => 'Joint Support Chews',
+            'meta' => 'VetPlus Mobility',
+            'price' => 'EGP 1,500',
+            'image' => 'joint-support-chews.jpg',
+            'ingredients' => ['glucosamine', 'chondroitin', 'chicken flavor']
+        ],
+        [
+            'name' => 'Chicken Crunchy Treats',
+            'meta' => 'PawSnacks Co.',
+            'price' => 'EGP 450',
+            'image' => 'Chicken-Crunchy-Treats.jpg',
+            'ingredients' => ['chicken', 'wheat', 'corn']
+        ],
+        [
+            'name' => 'Adult Dry Food 1kg',
+            'meta' => 'Royal Canin',
+            'price' => 'EGP 260',
+            'image' => 'Dry-Food.jpg',
+            'ingredients' => ['chicken', 'rice', 'corn', 'wheat']
+        ],
+        [
+            'name' => 'Omega-3 Fish Oil',
+            'meta' => 'PetWell Naturals',
+            'price' => 'EGP 1,200',
+            'image' => 'Omega-3-Fish-Oil.jpg',
+            'ingredients' => ['fish oil', 'salmon', 'omega 3']
+        ],
+    ];
+
+    function homeProductAllergyWarning(array $pets, array $ingredients): array
+    {
+        $warnings = [];
+
+        foreach ($pets as $pet) {
+            $petName = trim((string)($pet['name'] ?? 'Your pet'));
+            $allergiesText = strtolower((string)($pet['allergies'] ?? ''));
+            $allergies = array_filter(array_map('trim', explode(',', $allergiesText)));
+            $matches = [];
+
+            foreach ($allergies as $allergy) {
+                foreach ($ingredients as $ingredient) {
+                    if ($allergy !== '' && stripos($ingredient, $allergy) !== false) {
+                        $matches[] = $allergy;
+                    }
+                }
+            }
+
+            $matches = array_unique($matches);
+
+            if (!empty($matches)) {
+                $warnings[] = $petName . ': ' . implode(', ', $matches);
+            }
+        }
+
+        return $warnings;
+    }
 
     $firstName = explode(' ', trim($username))[0] ?: 'Guest';
     $displayPets = $pets;
@@ -1753,10 +1848,10 @@ $defaultPetImage = asset('images/guest.png');
                             </div>
                         </article>
                     </div>
-
-                    <a href="#" class="marketplace-cta">Explore Marketplace <i class="fas fa-arrow-right"></i></a>
+                    <a href="<?= htmlspecialchars(project_url('Smart Marketplace Page/smart_marketplace_pet_care.php')) ?>" class="marketplace-cta">
+                        Explore Marketplace <i class="fas fa-arrow-right"></i>
+                    </a>
                 </div>
-
                 <div class="marketplace-card">
                     <div class="marketplace-image-wrapper">
                         <img src="images/Pet Marketplace.png" alt="Premium pet marketplace hero">
@@ -1770,24 +1865,24 @@ $defaultPetImage = asset('images/guest.png');
 
             <div class="marketplace-products">
                 <div class="marketplace-products-head">
-                    <h3>Recommended for Your Pet ✨</h3>
-                    <a href="#" class="marketplace-view-all">View All</a>
+                    <h3>Recommended ✨</h3>
+                    <a href="<?= htmlspecialchars(project_url('Smart Marketplace Page/smart_marketplace_pet_care.php')) ?>" class="marketplace-view-all">View All</a>
                 </div>
 
                 <div class="marketplace-grid">
                     <?php foreach ($recommendedProducts as $product): ?>
                         <article class="market-card">
                             <?php
-                            $productImage = !empty($product['image']) ? trim($product['image']) : 'default-product.png';
-                            $productImage = strtolower(preg_replace('/\s+/', '-', $productImage));
-                            $productImage = preg_replace('/[^a-z0-9\-_.]/', '', $productImage);
+                            $productImage = !empty($product['image']) ? basename(trim($product['image'])) : 'default-product.png';
+                            $marketplaceUrl = project_url('Smart Marketplace Page/smart_marketplace_pet_care.php');
+                            $allergyWarnings = homeProductAllergyWarning($pets, $product['ingredients'] ?? []);
                             ?>
                             <div class="product-image-wrapper">
                                 <button class="market-wishlist" type="button" aria-label="Add <?= htmlspecialchars($product['name']) ?> to wishlist">
                                     <i class="fas fa-heart"></i>
                                 </button>
                                 <img
-                                    src="images/marketplace/<?= htmlspecialchars($productImage) ?>"
+                                    src="<?= htmlspecialchars(project_url('Smart Marketplace Page/images/' . $productImage)) ?>"
                                     alt="<?= htmlspecialchars($product['name']) ?>"
                                     class="product-image"
                                     onerror="this.onerror=null;this.src='images/marketplace/default-product.png';">
@@ -1796,7 +1891,12 @@ $defaultPetImage = asset('images/guest.png');
                             <div class="market-card-body">
                                 <h4><?= htmlspecialchars($product['name']) ?></h4>
                                 <p><?= htmlspecialchars($product['meta']) ?></p>
-                                <p class="market-image-debug"><?= htmlspecialchars('images/marketplace/' . $productImage) ?></p>
+                                <?php if (!empty($allergyWarnings)): ?>
+                                    <div class="market-allergy-warning">
+                                        <i class="fas fa-triangle-exclamation"></i>
+                                        Allergy alert for <?= htmlspecialchars(implode(' | ', $allergyWarnings)) ?>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="market-rating">
                                     <i class="fas fa-star"></i>
                                     <?= htmlspecialchars($product['rating'] ?? '4.8') ?>
@@ -1804,9 +1904,12 @@ $defaultPetImage = asset('images/guest.png');
                                 </div>
                                 <div class="market-card-footer">
                                     <div class="market-price"><?= htmlspecialchars($product['price']) ?></div>
-                                    <button class="market-add" type="button" aria-label="Add <?= htmlspecialchars($product['name']) ?> to cart">
+                                    <a
+                                        href="<?= htmlspecialchars($marketplaceUrl . '?add_product=' . urlencode($product['name'])) ?>#my-cart"
+                                        class="market-add"
+                                        aria-label="Add <?= htmlspecialchars($product['name']) ?> to cart">
                                         <i class="fas fa-cart-shopping"></i>
-                                    </button>
+                                    </a>
                                 </div>
                             </div>
                         </article>

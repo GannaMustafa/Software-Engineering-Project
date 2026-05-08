@@ -109,6 +109,24 @@ document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
   });
 });
 
+const addProductFromHome = new URLSearchParams(window.location.search).get('add_product');
+
+if (addProductFromHome) {
+  const targetBtn = Array.from(document.querySelectorAll('.add-to-cart-btn'))
+    .find(btn => btn.dataset.name === addProductFromHome);
+
+  if (targetBtn) {
+    targetBtn.click();
+
+    setTimeout(() => {
+      document.getElementById('my-cart')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }, 250);
+  }
+}
+
 // ---- RENDER CART ----
 function renderCart() {
 

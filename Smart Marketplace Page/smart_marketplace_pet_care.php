@@ -1026,7 +1026,7 @@ if (!empty($_SESSION['user_id'])) {
     </div>
 
     <!-- ===== MY CART SECTION ===== -->
-    <h3 class="section-title" style="margin-top:44px;">
+    <h3 class="section-title" id="my-cart" style="margin-top:44px;">
       <span class="dot" style="background:var(--green);"></span>
       My Cart
       <span id="cart-count-badge"
