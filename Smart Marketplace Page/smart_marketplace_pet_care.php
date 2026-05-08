@@ -13,8 +13,154 @@ if (!function_exists('asset')) {
   }
 }
 
+function createMarketplaceNotification(PDO $db, int $userId, string $title, string $message, string $type): void
+{
+  if (!$userId) {
+    return;
+  }
+
+  $check = $db->prepare("
+    SELECT id
+    FROM notifications
+    WHERE user_id = ?
+      AND title = ?
+      AND message = ?
+      AND type = ?
+      AND DATE(created_at) = CURDATE()
+    LIMIT 1
+  ");
+  $check->execute([$userId, $title, $message, $type]);
+
+  if ($check->fetchColumn()) {
+    return;
+  }
+
+  $stmt = $db->prepare("
+    INSERT INTO notifications (user_id, title, message, type, is_read)
+    VALUES (?, ?, ?, ?, 0)
+  ");
+  $stmt->execute([$userId, $title, $message, $type]);
+}
+
+
+function getVetRecommendation(PDO $db, ?array $selectedPet, ?int $ownerUserId): array
+{
+  $fallback = [
+    'has_doctor' => false,
+    'doctor' => '',
+    'title' => '',
+    'meta' => ''
+  ];
+
+  if (!$selectedPet || !$ownerUserId) {
+    return $fallback;
+  }
+
+  $stmt = $db->prepare("
+    SELECT vr.*, u.username AS vet_name
+    FROM vet_requests vr
+    LEFT JOIN users u ON u.id = vr.reviewed_by
+    WHERE vr.pet_id = ?
+      AND vr.owner_user_id = ?
+      AND vr.reviewed_by IS NOT NULL
+    ORDER BY COALESCE(vr.reviewed_at, vr.created_at) DESC, vr.id DESC
+    LIMIT 1
+  ");
+  $stmt->execute([(int)$selectedPet['id'], $ownerUserId]);
+  $request = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  if (!$request) {
+    return $fallback;
+  }
+
+  $vetName = trim((string)($request['vet_name'] ?? ''));
+  $doctor = $vetName !== '' && stripos($vetName, 'Dr.') !== 0 ? 'Dr. ' . $vetName : $vetName;
+
+  return [
+    'has_doctor' => true,
+    'doctor' => $doctor ?: 'your veterinarian',
+    'title' => 'Recommended from: ' . ($request['title'] ?? 'last vet request'),
+    'meta' => 'Linked to request #' . (int)$request['id'] . ' - status: ' . ucfirst($request['status'] ?? 'reviewed')
+  ];
+}
+
+function getRenalCareDietRequest(PDO $db, ?array $selectedPet, ?int $ownerUserId): array
+{
+  $fallback = [
+    'status' => 'none',
+    'is_approved' => false,
+    'is_pending' => false
+  ];
+
+  if (!$selectedPet || !$ownerUserId) {
+    return $fallback;
+  }
+
+  $stmt = $db->prepare("
+    SELECT *
+    FROM vet_requests
+    WHERE pet_id = ?
+      AND owner_user_id = ?
+      AND request_type = 'renal_care_diet_approval'
+      AND related_type = 'marketplace_product'
+    ORDER BY
+      CASE
+        WHEN status IN ('approved', 'completed') THEN 0
+        WHEN status = 'pending' THEN 1
+        ELSE 2
+      END,
+      COALESCE(reviewed_at, created_at) DESC,
+      id DESC
+    LIMIT 1
+  ");
+  $stmt->execute([(int)$selectedPet['id'], $ownerUserId]);
+  $request = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  if (!$request) {
+    return $fallback;
+  }
+
+  $status = strtolower($request['status'] ?? 'none');
+
+  return [
+    'status' => $status,
+    'is_approved' => in_array($status, ['approved', 'completed'], true),
+    'is_pending' => $status === 'pending'
+  ];
+}
+
+function petHasVetInMedicalProcedures(PDO $db, ?array $selectedPet): bool
+{
+  if (!$selectedPet) {
+    return false;
+  }
+
+  $stmt = $db->prepare("
+    SELECT id
+    FROM medical_procedures
+    WHERE pet_id = ?
+      AND vet_id IS NOT NULL
+    LIMIT 1
+  ");
+  $stmt->execute([(int)$selectedPet['id']]);
+
+  return (bool)$stmt->fetchColumn();
+}
+
 $pets = [];
 $selectedPet = null;
+$vetRecommendation = [
+  'has_doctor' => false,
+  'doctor' => '',
+  'title' => '',
+  'meta' => ''
+];
+$renalCareDietRequest = [
+  'status' => 'none',
+  'is_approved' => false,
+  'is_pending' => false
+];
+
 
 if (!empty($_SESSION['user_id'])) {
   try {
@@ -44,6 +190,9 @@ if (!empty($_SESSION['user_id'])) {
 
       if ($selectedPet) {
         $_SESSION['marketplace_pet_id'] = $selectedPet['id'];
+        $vetRecommendation = getVetRecommendation($db, $selectedPet, (int)$_SESSION['user_id']);
+        $renalCareDietRequest = getRenalCareDietRequest($db, $selectedPet, (int)$_SESSION['user_id']);
+        $petHasVet = petHasVetInMedicalProcedures($db, $selectedPet);
       }
     }
   } catch (Exception $e) {
@@ -92,10 +241,51 @@ function productAllergyAlert(array $petAllergies, array $ingredients, string $pe
     ' — no allergens detected</div>';
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'request_renal_care_diet') {
+  if (empty($_SESSION['user_id']) || !$selectedPet) {
+    header('Location: ' . $_SERVER['REQUEST_URI']);
+    exit;
+  }
+
+  try {
+    $db = Database::getInstance()->getConnection();
+
+    if (!petHasVetInMedicalProcedures($db, $selectedPet)) {
+      header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?') . '?pet_id=' . (int)$selectedPet['id']);
+      exit;
+    }
+
+    $check = $db->prepare("
+      SELECT id
+      FROM vet_requests
+      WHERE pet_id = ?
+        AND owner_user_id = ?
+        AND request_type = 'renal_care_diet_approval'
+        AND related_type = 'marketplace_product'
+        AND status IN ('pending', 'approved', 'completed')
+      LIMIT 1
+    ");
+    $check->execute([(int)$selectedPet['id'], (int)$_SESSION['user_id']]);
+
+    if (!$check->fetchColumn()) {
+      $stmt = $db->prepare("
+        INSERT INTO vet_requests
+          (pet_id, owner_user_id, request_type, title, description, priority, related_type)
+        VALUES (?, ?, 'renal_care_diet_approval', 'Renal Care Diet approval', ?, 'normal', 'marketplace_product')
+      ");
+
+      $description = 'Owner requested vet approval to buy Renal Care Diet from Smart Marketplace for ' . ($selectedPet['name'] ?? 'this pet') . '.';
+      $stmt->execute([(int)$selectedPet['id'], (int)$_SESSION['user_id'], $description]);
+    }
+  } catch (Exception $e) {
+  }
+
+  header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?') . '?pet_id=' . (int)$selectedPet['id']);
+  exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'checkout') {
   header('Content-Type: application/json');
-
   if (empty($_SESSION['user_id'])) {
     echo json_encode(['ok' => false, 'message' => 'Please login first.']);
     exit;
@@ -230,6 +420,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check
       $deductStmt->execute([$_SESSION['user_id'], -$pointsToDeduct]);
     }
 
+    createMarketplaceNotification(
+      $db,
+      (int)$_SESSION['user_id'],
+      'Order placed successfully',
+      'Your marketplace order #' . $orderId . ' has been placed. Delivery date: ' . date('M j, Y', strtotime($deliveryDate)) . '.',
+      'marketplace_order'
+    );
+
     $db->commit();
 
     echo json_encode([
@@ -333,6 +531,17 @@ if (!empty($_SESSION['user_id'])) {
 
       $autoShipStmt->execute([$ownerId]);
       $autoShipOrders = $autoShipStmt->fetchAll(PDO::FETCH_ASSOC);
+      foreach ($autoShipOrders as $autoOrder) {
+        if (!empty($autoOrder['delivery_date']) && date('Y-m-d', strtotime($autoOrder['delivery_date'])) === date('Y-m-d', strtotime('+1 day'))) {
+          createMarketplaceNotification(
+            $db,
+            (int)$_SESSION['user_id'],
+            'Auto-ship delivery tomorrow',
+            'Your auto-ship item "' . ($autoOrder['items'] ?? 'pet product') . '" is scheduled for delivery tomorrow.',
+            'auto_ship_delivery'
+          );
+        }
+      }
     }
   } catch (Exception $e) {
     $autoShipOrders = [];
@@ -427,7 +636,7 @@ if (!empty($_SESSION['user_id'])) {
                 <div class="pet-picker-empty">No pets added yet</div>
               <?php endif; ?>
 
-              <a class="pet-picker-add" href="../Paw Hubs/public/index.php?url=user/profile">
+              <a class="pet-picker-add" href="<?= htmlspecialchars(app_url('home/index', 'my-pets')) ?>">
                 + Add New Pet
               </a>
             </div>
@@ -489,19 +698,22 @@ if (!empty($_SESSION['user_id'])) {
 
 
     <!-- VET PANEL -->
-    <h3 class="section-title"><span class="dot"></span> Recommended by Dr. Hassan (last consultation)</h3>
-    <div class="vet-panel mb-2">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-          <span class="vet-tag"><i class="bi bi-shield-check"></i> VET LINK ACTIVE</span>
-          <h6 class="mt-2">3 products from your last visit unlock a <b style="color:var(--teal);">15% discount</b></h6>
-          <small style="color:var(--muted);">Linked to consultation #CN-2041 • valid until May 28, 2026</small>
+    <?php if (!empty($vetRecommendation['has_doctor'])): ?>
+      <!-- VET PANEL -->
+      <h3 class="section-title"><span class="dot"></span> Recommended by <?= htmlspecialchars($vetRecommendation['doctor']) ?> (last consultation)</h3>
+      <div class="vet-panel mb-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <span class="vet-tag"><i class="bi bi-shield-check"></i> VET LINK ACTIVE</span>
+            <h6 class="mt-2"><?= htmlspecialchars($vetRecommendation['title']) ?> unlocks a <b style="color:var(--teal);">15% discount</b></h6>
+            <small style="color:var(--muted);"><?= htmlspecialchars($vetRecommendation['meta']) ?></small>
+          </div>
+          <button class="btn btn-primary-soft" id="view-recommendations-btn" style="width:auto;padding:10px 22px;">
+            View Recommendations
+          </button>
         </div>
-        <button class="btn btn-primary-soft" id="view-recommendations-btn" style="width:auto;padding:10px 22px;">
-          View Recommendations
-        </button>
       </div>
-    </div>
+    <?php endif; ?>
 
     <!-- BROWSE PRODUCTS -->
     <h3 class="section-title"><span class="dot" style="background:var(--sky);"></span> Browse Products</h3>
@@ -512,7 +724,9 @@ if (!empty($_SESSION['user_id'])) {
       <div class="chip" data-filter="supplements">Supplements</div>
       <div class="chip" data-filter="hygiene">Hygiene</div>
       <div class="chip" data-filter="toys">Toys</div>
-      <div class="chip" data-filter="vet-recommended"><i class="bi bi-shield-plus"></i> Vet-Recommended</div>
+      <?php if (!empty($vetRecommendation['has_doctor'])): ?>
+        <div class="chip" data-filter="vet-recommended"><i class="bi bi-shield-plus"></i> Vet-Recommended</div>
+      <?php endif; ?>
       <div class="chip" data-filter="auto-ship"><i class="bi bi-arrow-repeat"></i> Auto-Ship Eligible</div>
     </div>
 
@@ -526,27 +740,66 @@ if (!empty($_SESSION['user_id'])) {
             <h5>Renal Care Diet</h5>
             <div class="brand">Hill's Prescription</div>
             <div class="price">EGP 2,400</div>
-            <div class="rx-info"><i class="bi bi-lock-fill"></i><span>Vet prescription required. Awaiting approval from
-                Dr. Hassan.</span></div>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft btn-locked" disabled><i class="bi bi-lock"></i>
-                Locked — Request Approval</button></div>
+
+            <?php if (!empty($renalCareDietRequest['is_approved'])): ?>
+              <div class="rx-info"><i class="bi bi-check-circle-fill"></i><span>Vet approved. You can buy it now.</span></div>
+              <div class="mt-auto pt-3">
+                <button class="btn-primary-soft add-to-cart-btn"
+                  data-name="Renal Care Diet"
+                  data-brand="Hill's Prescription"
+                  data-price="2400"
+                  data-bg="bg-green"
+                  data-badge="rx"
+                  data-badge-label="RX APPROVED"
+                  data-pts="48">
+                  <i class="bi bi-cart-plus"></i> Add to Cart
+                </button>
+              </div>
+            <?php elseif (!empty($renalCareDietRequest['is_pending'])): ?>
+              <div class="rx-info"><i class="bi bi-hourglass-split"></i><span>Approval request sent. Waiting for vet approval.</span></div>
+              <div class="mt-auto pt-3">
+                <button class="btn-primary-soft btn-locked" disabled><i class="bi bi-lock"></i> Pending Vet Approval</button>
+              </div>
+            <?php else: ?>
+              <?php if (!empty($petHasVet)): ?>
+                <div class="rx-info"><i class="bi bi-lock-fill"></i><span>Vet prescription required before buying.</span></div>
+                <form method="post" class="mt-auto pt-3">
+                  <input type="hidden" name="action" value="request_renal_care_diet">
+                  <button class="btn-primary-soft" type="submit"><i class="bi bi-send"></i> Request Vet Approval</button>
+                </form>
+              <?php else: ?>
+                <div class="rx-info"><i class="bi bi-exclamation-circle"></i><span>No vet is linked to this pet yet.</span></div>
+                <div class="mt-auto pt-3">
+                  <button class="btn-primary-soft btn-locked" type="button" disabled><i class="bi bi-lock"></i> No Vet Available</button>
+                </div>
+              <?php endif; ?>
+            <?php endif; ?>
           </div>
         </div>
       </div>
 
-      <div class="col" data-category="supplements vet-recommended">
+      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
         <div class="product">
-          <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
+          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
+            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
+          <?php endif; ?>
           <div class="product-img"><img src="images/joint-support-chews.jpg" alt="Joint Support Chews" loading="lazy">
           </div>
           <div class="product-body">
             <h5>Joint Support Chews</h5>
             <div class="brand">VetPlus Mobility</div>
-            <div class="price">EGP 1,275 <small>EGP 1,500</small></div>
+            <div class="price">
+              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 1,275 <small>EGP 1,500</small>' : 'EGP 1,500' ?>
+            </div>
             <?= productAllergyAlert($petAllergies, ['glucosamine', 'chondroitin', 'chicken flavor'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Joint Support Chews"
-                data-brand="VetPlus Mobility" data-price="1275" data-old="1500" data-bg="bg-sand"
-                data-badge="vet" data-badge-label="VET -15%" data-pts="26"><i class="bi bi-cart-plus"></i> Add to
+                data-brand="VetPlus Mobility"
+                data-price="<?= !empty($vetRecommendation['has_doctor']) ? '1275' : '1500' ?>"
+                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '1500' : '' ?>"
+                data-bg="bg-sand"
+                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>"
+                data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>"
+                data-pts="26"><i class="bi bi-cart-plus"></i> Add to
                 Cart</button></div>
           </div>
         </div>
@@ -588,20 +841,27 @@ if (!empty($_SESSION['user_id'])) {
         </div>
       </div>
 
-      <div class="col" data-category="supplements vet-recommended">
+      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
         <div class="product">
-          <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK</span>
+          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
+            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
+          <?php endif; ?>
           <div class="product-img"><img src="images/Omega-3-Fish-Oil.jpg" alt="Omega-3 Fish Oil" loading="lazy"></div>
           <div class="product-body">
             <h5>Omega-3 Fish Oil</h5>
             <div class="brand">PetWell Naturals</div>
-            <div class="price">EGP 1,000 <small>EGP 1,200</small></div>
+            <div class="price">
+              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 1,000 <small>EGP 1,200</small>' : 'EGP 1,200' ?>
+            </div>
             <?= productAllergyAlert($petAllergies, ['fish oil', 'salmon', 'omega 3'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Omega-3 Fish Oil"
-                data-brand="PetWell Naturals" data-price="1000" data-old="1200" data-bg="bg-mint"
-                data-badge="vet" data-badge-label="VET PICK" data-pts="20" data-task-points="180"><i class="bi bi-cart-plus"></i> Add to
-                Cart</button></div>
-
+                data-brand="PetWell Naturals" data-price="<?= !empty($vetRecommendation['has_doctor']) ? '1000' : '1200' ?>"
+                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '1200' : '' ?>"
+                data-bg="bg-mint"
+                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>" data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>" data-pts="20"
+                data-task-points="180"><i class="bi bi-cart-plus"></i> Add to
+                Cart</button>
+            </div>
           </div>
         </div>
       </div>
@@ -642,34 +902,25 @@ if (!empty($_SESSION['user_id'])) {
         </div>
       </div>
 
-      <div class="col" data-category="supplements">
+      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
         <div class="product">
-          <span class="badge-tag badge-rx"><i class="bi bi-prescription2"></i> RX REQUIRED</span>
-          <div class="product-img"><img src="images/Anti-Anxiety-Tablets.webp" loading="lazy"></div>
-          <div class="product-body">
-            <h5>Anti-Anxiety Tablets</h5>
-            <div class="brand">CalmVet Rx</div>
-            <div class="price">EGP 1,600</div>
-            <div class="rx-info"><i class="bi bi-lock-fill"></i><span>Vet prescription required.</span></div>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft btn-locked" disabled><i class="bi bi-lock"></i>
-                Locked — Request Approval</button></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="treats vet-recommended">
-        <div class="product">
-          <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -10%</span>
+          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
+            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
+          <?php endif; ?>
           <div class="product-img"><img src="images/Dental-Chew-Sticks.jpg" alt="Dental Chew Sticks" loading="lazy">
           </div>
           <div class="product-body">
             <h5>Dental Chew Sticks</h5>
             <div class="brand">FreshBite</div>
-            <div class="price">EGP 540 <small>EGP 600</small></div>
+            <div class="price">
+              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 540 <small>EGP 600</small>' : 'EGP 600' ?>
+            </div>
             <?= productAllergyAlert($petAllergies, ['beef', 'wheat', 'mint'], $petName) ?>
             <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Dental Chew Sticks"
-                data-brand="FreshBite" data-price="540" data-old="600" data-bg="bg-mint"
-                data-badge="vet" data-badge-label="VET -10%" data-pts="120">
+                data-brand="FreshBite" data-price="<?= !empty($vetRecommendation['has_doctor']) ? '540' : '600' ?>"
+                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '600' : '' ?>"
+                data-bg="bg-mint"
+                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>" data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>" data-pts="120">
                 <i class="bi bi-cart-plus"></i> Add to
                 Cart</button>
             </div>

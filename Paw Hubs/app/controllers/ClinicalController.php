@@ -90,7 +90,7 @@ class ClinicalController extends Controller
         $referrals = $this->referrals($db, $vetId);
         $auditLogs = $this->auditLogs($db, $vetId, $role, 5);
         $workflowRequests = $this->vetWorkflowRequests($db, $vetId);
-        $vetRequests = $this->vetRequests($db);
+        $vetRequests = $this->vetRequests($db, $vetId);
         $permissions = $this->vetPermissions($db, $vetId);
         $stats = [
             'procedures' => $this->countRows($db, 'medical_procedures', $vetId ? 'vet_id = ?' : null, $vetId ? [$vetId] : []),
@@ -1210,20 +1210,52 @@ class ClinicalController extends Controller
         );
     }
 
-    private function vetRequests($db)
+    private function vetCanReviewPetRequest($db, $vetId, $petId)
     {
+        if (!$vetId || !$petId) {
+            return false;
+        }
+
+        $row = $this->fetchOne(
+            $db,
+            "SELECT id
+         FROM medical_procedures
+         WHERE pet_id = ?
+           AND vet_id = ?
+         LIMIT 1",
+            [$petId, $vetId]
+        );
+
+        return !empty($row);
+    }
+
+    private function vetRequests($db, $vetId)
+    {
+        $vetFilter = $vetId
+            ? "AND EXISTS (
+            SELECT 1
+            FROM medical_procedures mp
+            WHERE mp.pet_id = vr.pet_id
+              AND mp.vet_id = ?
+        )"
+            : "";
+
+        $params = $vetId ? [$vetId] : [];
+
         return $this->fetchAll(
             $db,
             "SELECT vr.*, p.name AS pet_name, p.species, u.username AS owner_name
-             FROM vet_requests vr
-             LEFT JOIN pets p ON p.id = vr.pet_id
-             LEFT JOIN users u ON u.id = vr.owner_user_id
-             WHERE vr.status = 'pending'
-             ORDER BY
-               CASE WHEN vr.priority = 'urgent' THEN 0 ELSE 1 END,
-               vr.created_at DESC,
-               vr.id DESC
-             LIMIT 10"
+         FROM vet_requests vr
+         LEFT JOIN pets p ON p.id = vr.pet_id
+         LEFT JOIN users u ON u.id = vr.owner_user_id
+         WHERE vr.status = 'pending'
+           $vetFilter
+         ORDER BY
+           CASE WHEN vr.priority = 'urgent' THEN 0 ELSE 1 END,
+           vr.created_at DESC,
+           vr.id DESC
+         LIMIT 10",
+            $params
         );
     }
 
@@ -1240,6 +1272,10 @@ class ClinicalController extends Controller
         $request = $this->fetchOne($db, "SELECT * FROM vet_requests WHERE id = ?", [$requestId]);
         if (!$request) {
             return [null, ['Vet request was not found.']];
+        }
+
+        if ($vetId && !$this->vetCanReviewPetRequest($db, $vetId, (int) ($request['pet_id'] ?? 0))) {
+            return [null, ['This request is not linked to one of your pet cases.']];
         }
 
         if ($resolution === 'completed' && ($request['related_type'] ?? '') === 'vaccine' && !empty($request['related_id'])) {
@@ -1259,8 +1295,26 @@ class ClinicalController extends Controller
         SET status = ?, reviewed_by = ?, reviewed_at = NOW()
         WHERE id = ?
         ");
-        $stmt->execute([$resolution, $reviewerUserId, $requestId]);
 
+        $stmt->execute([$resolution, $reviewerUserId, $requestId]);
+        if (
+            in_array($resolution, ['approved', 'completed'], true)
+            && ($request['request_type'] ?? '') === 'renal_care_diet_approval'
+            && !empty($request['owner_user_id'])
+        ) {
+            $notify = $db->prepare("
+                INSERT INTO notifications (user_id, title, message, type, is_read)
+                VALUES (?, ?, ?, ?, 0)
+            ");
+
+            $notify->execute([
+                (int) $request['owner_user_id'],
+                'Diet approved',
+                'Your vet approved Renal Care Diet. You can now buy it from the marketplace.',
+                'diet_approval',
+                0
+            ]);
+        }
         return ['Vet request updated successfully.', []];
     }
 

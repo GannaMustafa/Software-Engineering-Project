@@ -210,16 +210,20 @@ if (isset($_SESSION['user_id']) && $db) {
         position: sticky;
         top: 0;
         z-index: 1000;
+        display: block;
+        width: 100%;
     }
 
     .nav-container {
         max-width: 1440px;
+        width: 100%;
         margin: 0 auto;
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 0 34px;
         gap: 24px;
+        box-sizing: border-box;
     }
 
     .logo {
