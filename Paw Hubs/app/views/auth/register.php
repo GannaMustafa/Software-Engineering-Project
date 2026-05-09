@@ -1,10 +1,11 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Join Us | Paw Hubs</title>
-    
+
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
@@ -21,14 +22,20 @@
             --error: #ff4d4d;
         }
 
-        * { box-sizing: border-box; transition: all 0.3s ease; }
+        * {
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
 
         body {
-            margin: 0; padding: 20px;
+            margin: 0;
+            padding: 20px;
             font-family: 'Outfit', sans-serif;
             background: linear-gradient(135deg, var(--bg-color) 0%, var(--secondary) 100%);
             min-height: 100vh;
-            display: flex; justify-content: center; align-items: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .register-container {
@@ -37,21 +44,48 @@
             padding: 40px;
             border-radius: 30px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-            width: 100%; max-width: 550px;
+            width: 100%;
+            max-width: 550px;
             animation: fadeIn 0.8s ease;
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
 
-        .header { text-align: center; margin-bottom: 30px; }
-        .header h2 { margin: 0; font-size: 28px; color: var(--text-dark); }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h2 {
+            margin: 0;
+            font-size: 28px;
+            color: var(--text-dark);
+        }
 
         .error-list {
             background: rgba(255, 77, 77, 0.1);
             border-left: 4px solid var(--error);
-            padding: 15px; border-radius: 12px; margin-bottom: 25px;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 25px;
         }
-        .error-list ul { margin: 0; padding-left: 20px; color: var(--error); font-size: 14px; }
+
+        .error-list ul {
+            margin: 0;
+            padding-left: 20px;
+            color: var(--error);
+            font-size: 14px;
+        }
 
         .success-box {
             background: rgba(107, 181, 168, 0.14);
@@ -64,15 +98,35 @@
             font-weight: 600;
         }
 
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .full-width { grid-column: span 2; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
 
-        .input-wrapper { position: relative; }
-        .input-wrapper i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--primary); }
+        .full-width {
+            grid-column: span 2;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+        }
+
         .input-wrapper input {
-            width: 100%; padding: 12px 14px 12px 40px;
-            border: 2px solid #d8ebe5; border-radius: 12px;
-            outline: none; background: #f5faf8;
+            width: 100%;
+            padding: 12px 14px 12px 40px;
+            border: 2px solid #d8ebe5;
+            border-radius: 12px;
+            outline: none;
+            background: #f5faf8;
         }
 
         .upload-box {
@@ -205,18 +259,39 @@
         }
 
         button[type="submit"] {
-            width: 100%; padding: 15px;
+            width: 100%;
+            padding: 15px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border: none; border-radius: 14px;
-            color: white; font-size: 16px; font-weight: 600;
-            cursor: pointer; box-shadow: 0 10px 20px -5px rgba(107, 181, 168, 0.4);
+            border: none;
+            border-radius: 14px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 20px -5px rgba(107, 181, 168, 0.4);
         }
 
-        .footer-link { text-align: center; margin-top: 25px; }
-        .footer-link a { color: var(--primary); font-weight: 600; text-decoration: none; }
-        .form-note { grid-column: span 2; color: #718096; font-size: 12px; line-height: 1.4; margin-top: -4px; }
+        .footer-link {
+            text-align: center;
+            margin-top: 25px;
+        }
+
+        .footer-link a {
+            color: var(--primary);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .form-note {
+            grid-column: span 2;
+            color: #718096;
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: -4px;
+        }
     </style>
 </head>
+
 <body>
     <div class="register-container">
         <div class="header">
@@ -226,7 +301,7 @@
         <?php if (!empty($errors)): ?>
             <div class="error-list">
                 <ul>
-                    <?php foreach($errors as $err): ?>
+                    <?php foreach ($errors as $err): ?>
                         <li><?= htmlspecialchars($err) ?></li>
                     <?php endforeach; ?>
                 </ul>
@@ -268,12 +343,17 @@
 
                 <div class="input-wrapper">
                     <i class="fas fa-lock"></i>
-                    <input type="password" name="pass" placeholder="Password" required>
+                    <input type="password" name="pass" placeholder="Password" required title="Password must include letters and numbers">
                 </div>
 
                 <div class="input-wrapper">
                     <i class="fas fa-check-circle"></i>
                     <input type="password" name="confirm_pass" placeholder="Confirm Password" required>
+                </div>
+
+                <div class="input-wrapper full-width">
+                    <i class="fas fa-house"></i>
+                    <input type="text" name="address" placeholder="Full Address" value="<?= htmlspecialchars($old['address'] ?? '') ?>" required>
                 </div>
 
                 <p class="form-note">Phone must be Egyptian, like 01012345678. Password must include letters and numbers.</p>
@@ -324,27 +404,27 @@
         const acceptRules = document.getElementById('acceptRules');
         const acceptCheckbox = document.querySelector('input[name="accept_rules"]');
 
-        profileImage.addEventListener('change', function () {
+        profileImage.addEventListener('change', function() {
             uploadLabel.textContent = this.files.length ? this.files[0].name : 'Upload profile picture';
         });
 
-        openRules.addEventListener('click', function () {
+        openRules.addEventListener('click', function() {
             rulesModal.classList.add('show');
             rulesModal.setAttribute('aria-hidden', 'false');
         });
 
-        closeRules.addEventListener('click', function () {
+        closeRules.addEventListener('click', function() {
             rulesModal.classList.remove('show');
             rulesModal.setAttribute('aria-hidden', 'true');
         });
 
-        acceptRules.addEventListener('click', function () {
+        acceptRules.addEventListener('click', function() {
             acceptCheckbox.checked = true;
             rulesModal.classList.remove('show');
             rulesModal.setAttribute('aria-hidden', 'true');
         });
 
-        rulesModal.addEventListener('click', function (event) {
+        rulesModal.addEventListener('click', function(event) {
             if (event.target === rulesModal) {
                 rulesModal.classList.remove('show');
                 rulesModal.setAttribute('aria-hidden', 'true');
@@ -353,4 +433,5 @@
     </script>
     <?php require_once '../app/views/partials/theme_toggle.php'; ?>
 </body>
+
 </html>

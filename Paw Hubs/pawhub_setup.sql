@@ -821,10 +821,76 @@ ALTER TABLE `pet_owners`
 ALTER TABLE `services`
   ADD COLUMN IF NOT EXISTS `name` varchar(100) NOT NULL DEFAULT '' AFTER `provider_id`,
   ADD COLUMN IF NOT EXISTS `category` varchar(50) DEFAULT NULL AFTER `name`,
-  ADD COLUMN IF NOT EXISTS `description` text DEFAULT NULL AFTER `category`,
+  ADD COLUMN IF NOT EXISTS `price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `category`,
+  ADD COLUMN IF NOT EXISTS `duration` varchar(50) DEFAULT NULL AFTER `price`,
+  ADD COLUMN IF NOT EXISTS `performed_by` enum('Vet','Provider') DEFAULT 'Vet' AFTER `duration`,
+  ADD COLUMN IF NOT EXISTS `description` text DEFAULT NULL AFTER `performed_by`,
+  ADD COLUMN IF NOT EXISTS `status` varchar(20) NOT NULL DEFAULT 'active' AFTER `discount_percentage`,
   ADD COLUMN IF NOT EXISTS `created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `discount_percentage`,
   MODIFY `provider_id` int(11) DEFAULT NULL,
   MODIFY `discount_percentage` double NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS `service_bookings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `owner_id` int(11) NOT NULL,
+  `provider_id` int(11) NOT NULL,
+  `service_id` int(11) NOT NULL,
+  `pet_id` int(11) DEFAULT NULL,
+  `status` varchar(30) NOT NULL DEFAULT 'scheduled',
+  `booked_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `completed_at` datetime DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `provider_id` (`provider_id`),
+  KEY `owner_id` (`owner_id`),
+  KEY `service_id` (`service_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `service_completion_reports` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `booking_id` int(11) NOT NULL,
+  `provider_id` int(11) NOT NULL,
+  `owner_id` int(11) NOT NULL,
+  `service_id` int(11) NOT NULL,
+  `report_title` varchar(160) NOT NULL,
+  `report_details` text DEFAULT NULL,
+  `report_status` varchar(30) NOT NULL DEFAULT 'submitted',
+  `created_by` int(11) DEFAULT NULL,
+  `admin_confirmed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `booking_id` (`booking_id`),
+  KEY `provider_id` (`provider_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `provider_payments` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `booking_id` int(11) NOT NULL,
+  `report_id` int(11) DEFAULT NULL,
+  `provider_id` int(11) NOT NULL,
+  `owner_id` int(11) NOT NULL,
+  `service_id` int(11) NOT NULL,
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500,
+  `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+  `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `payment_method` varchar(30) NOT NULL DEFAULT 'cash',
+  `payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash',
+  `transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred',
+  `paid_at` datetime DEFAULT NULL,
+  `transferred_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `provider_id` (`provider_id`),
+  KEY `booking_id` (`booking_id`),
+  KEY `report_id` (`report_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 ALTER TABLE `orders`
   ADD COLUMN IF NOT EXISTS `status` varchar(20) NOT NULL DEFAULT 'pending' AFTER `availability_status`;
@@ -992,6 +1058,34 @@ INSERT INTO `vendors` (`id`, `name`, `balance`, `is_active`) VALUES
 ON DUPLICATE KEY UPDATE
   `name` = IF(`name` = '' OR `name` IS NULL, VALUES(`name`), `name`),
   `is_active` = 1;
+
+ALTER TABLE `vendors`
+  ADD COLUMN IF NOT EXISTS `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER `balance`,
+  ADD COLUMN IF NOT EXISTS `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_rate`;
+
+CREATE TABLE IF NOT EXISTS `vendor_payments` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_id` int(11) NOT NULL,
+  `vendor_id` int(11) NOT NULL,
+  `subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000,
+  `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+  `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `platform_total` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `payment_method` varchar(30) NOT NULL DEFAULT 'online',
+  `payment_status` varchar(30) NOT NULL DEFAULT 'paid',
+  `payout_status` varchar(30) NOT NULL DEFAULT 'pending',
+  `paid_at` datetime DEFAULT NULL,
+  `payout_released_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `order_id` (`order_id`),
+  KEY `vendor_id` (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 COMMIT;
 

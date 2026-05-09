@@ -394,17 +394,21 @@ $serviceCount = count($history['services']);
     <div class="profile-layout">
         <aside class="panel identity-panel">
             <img src="<?= htmlspecialchars($profileSrc) ?>" class="profile-img" alt="Profile picture">
-            <h1><?= htmlspecialchars($user['username']) ?></h1>
+            <h1><?= htmlspecialchars($user['username'] ?? 'User') ?></h1>
             <p><?= htmlspecialchars(ucfirst($user['role'] ?? 'pet_owner')) ?></p>
 
             <div class="mini-info">
                 <div>
                     <span>Email</span>
-                    <strong><?= htmlspecialchars($user['email']) ?></strong>
+                    <strong><?= htmlspecialchars($user['email'] ?? 'Not set') ?></strong>
                 </div>
                 <div>
                     <span>Phone</span>
                     <strong><?= htmlspecialchars($user['phone'] ?? 'Not set') ?></strong>
+                </div>
+                <div>
+                    <span>Address</span>
+                    <strong><?= htmlspecialchars($user['address'] ?? 'Not set') ?></strong>
                 </div>
                 <div>
                     <span>Member Since</span>
@@ -435,16 +439,17 @@ $serviceCount = count($history['services']);
                     <div class="form-grid">
                         <div class="field">
                             <label for="username">Username</label>
-                            <input id="username" type="text" name="username" value="<?= htmlspecialchars($user['username']) ?>" required>
+                            <input id="username" type="text" name="username" value="<?= htmlspecialchars($user['username'] ?? '') ?>" required>
                         </div>
                         <div class="field">
                             <label for="email">Email</label>
-                            <input id="email" type="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" required>
+                            <input id="email" type="email" name="email" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
                         </div>
                         <div class="field">
                             <label for="phone">Phone</label>
                             <input id="phone" type="text" name="phone" value="<?= htmlspecialchars($user['phone'] ?? '') ?>">
                         </div>
+                        
                         <div class="field">
                             <label for="profile_image">Profile Picture</label>
                             <div class="upload-field">
@@ -459,6 +464,10 @@ $serviceCount = count($history['services']);
                         <div class="field">
                             <label for="confirm_password">Confirm New Password</label>
                             <input id="confirm_password" type="password" name="confirm_password" placeholder="Repeat new password">
+                        </div>
+                        <div class="field full">
+                            <label for="address">Address</label>
+                            <input id="address" type="text" name="address" value="<?= htmlspecialchars($user['address'] ?? '') ?>">
                         </div>
                     </div>
                     <div class="actions">

@@ -35,7 +35,7 @@ class AuthController extends Controller
 
                 $this->insertNotification(
                     $user['id'],
-                    "Welcome back, " . $user['username'] . " 👋",
+                    "Welcome back, " . $user['username'],
                     'We are happy to see you again.',
                     'login'
                 );
@@ -64,6 +64,7 @@ class AuthController extends Controller
                 'email'    => validate_input($_POST['email'] ?? ''),
                 'phone'    => $this->normalizePhone($_POST['phone_number'] ?? ''),
                 'password' => $_POST['pass'] ?? '',
+                'address' => $_POST['address'] ?? '',
                 'role'     => 'pet_owner',
                 'status'   => 'active',
                 'image'    => 'default.png'
@@ -71,7 +72,9 @@ class AuthController extends Controller
             $old = [
                 'username' => $data['username'],
                 'email' => $data['email'],
-                'phone' => $data['phone']
+                'phone' => $data['phone'],
+                'address' => $data['address'],
+
             ];
 
             if (($data['password'] ?? '') !== ($_POST['confirm_pass'] ?? '')) {
@@ -170,7 +173,7 @@ class AuthController extends Controller
         $routes = [
             'admin' => 'admin/index',
             'vet' => 'clinical/index',
-            'service_provider' => 'vendor/index',
+            'service_provider' => 'logistics/index',
             'pet_owner' => 'home/index'
         ];
 

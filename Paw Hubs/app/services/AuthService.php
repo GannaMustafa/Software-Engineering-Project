@@ -79,7 +79,10 @@ class AuthService {
             $db->beginTransaction();
 
             $userId = $this->userModel->create($data);
-            $db->prepare("INSERT INTO pet_owners (user_id, address) VALUES (?, ?)")->execute([$userId, '']);
+            $db->prepare("INSERT INTO pet_owners (user_id, address) VALUES (?, ?)")->execute([
+                $userId,
+                trim($data['address'] ?? '')
+            ]);
             $this->writeAuditLog($db, $userId, 'register', 'New pet owner account created.', 'users', $userId);
 
             $db->commit();

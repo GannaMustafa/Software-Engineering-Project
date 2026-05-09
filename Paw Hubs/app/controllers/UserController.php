@@ -16,7 +16,11 @@ class UserController extends Controller {
         $errors = [];
         $success = null;
         $userId = $_SESSION['user_id'];
-        $userData = $userModel->getById($userId);
+        $userData = $this->fetchOne(
+            $db,
+            "SELECT u.*, po.address FROM users u LEFT JOIN pet_owners po ON po.user_id = u.id WHERE u.id = ?",
+            [$userId]
+        );
 
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $data = [
@@ -24,6 +28,7 @@ class UserController extends Controller {
                 'email' => trim($_POST['email'] ?? ''),
                 'phone' => trim($_POST['phone'] ?? ''),
                 'password' => $_POST['new_password'] ?? '',
+                'address' => trim($_POST['address'] ?? ''),
                 'image' => null
             ];
 
@@ -62,20 +67,53 @@ class UserController extends Controller {
 
             if (empty($errors)) {
                 $userModel->updateProfile($userId, $data);
-                $userData = $userModel->getById($userId);
+
+                if ($this->tableExists($db, 'pet_owners')) {
+                    $stmt = $db->prepare("SELECT id FROM pet_owners WHERE user_id = ? LIMIT 1");
+                    $stmt->execute([$userId]);
+                    $owner = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($owner) {
+                        $db->prepare("UPDATE pet_owners SET address = ? WHERE user_id = ?")->execute([
+                            $data['address'],
+                            $userId
+                        ]);
+                    } else {
+                        $db->prepare("INSERT INTO pet_owners (user_id, address) VALUES (?, ?)")->execute([
+                            $userId,
+                            $data['address']
+                        ]);
+                    }
+                }
+
+                $userData = $this->fetchOne(
+                    $db,
+                    "SELECT u.*, po.address FROM users u LEFT JOIN pet_owners po ON po.user_id = u.id WHERE u.id = ?",
+                    [$userId]
+                );
                 $_SESSION['username'] = $userData['username'];
                 $_SESSION['profile_pic'] = $userData['image'] ?? 'default.png';
                 $success = 'Profile updated successfully.';
             } elseif ($uploadedImage && file_exists($uploadedImage)) {
                 unlink($uploadedImage);
             }
+
+            $userData['address'] = $data['address'];
         }
 
         $owner = $this->fetchOne($db, "SELECT id FROM pet_owners WHERE user_id = ?", [$userId]);
         $ownerId = $owner['id'] ?? null;
 
+        $pets = [];
+        if ($ownerId) {
+            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id IN (?, ?)", [$ownerId, $userId]);
+        } else {
+            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id = ?", [$userId]);
+        }
+
         $this->view('user/profile', [
             'user' => $userData,
+            'pets' => $pets,
             'errors' => $errors,
             'success' => $success,
             'history' => [

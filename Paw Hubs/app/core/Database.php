@@ -2,52 +2,54 @@
 
 class Database
 {
-    private static $instance = null;
-    private $connection;
+  private static $instance = null;
+  private $connection;
 
-    private function __construct()
-    {
-        $host = "localhost";
-        $dbName = "pawhub";
-        $username = "root";
-        $password = "";
+  private function __construct()
+  {
+    $host = "localhost";
+    $dbName = "pawhub";
+    $username = "root";
+    $password = "";
 
-        try {
-            // 1. الاتصال بـ MySQL بدون تحديد قاعدة بيانات في الأول
-            $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    try {
+      // 1. الاتصال بـ MySQL بدون تحديد قاعدة بيانات في الأول
+      $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
+      $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-            // 2. إنشاء قاعدة البيانات لو مش موجودة
-            $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+      // 2. إنشاء قاعدة البيانات لو مش موجودة
+      $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
 
-            // 3. الاتصال بقاعدة البيانات المطلوبة فعلياً
-            $this->connection = new PDO("mysql:host=$host;dbname=$dbName;charset=utf8mb4", $username, $password);
-            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+      // 3. الاتصال بقاعدة البيانات المطلوبة فعلياً
+      $this->connection = new PDO("mysql:host=$host;dbname=$dbName;charset=utf8mb4", $username, $password);
+      $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-            // 4. إنشاء الجداول الأساسية لو مش موجودة (Self-Healing)
-            $this->createTables();
-            $this->migrateTables();
-        } catch (PDOException $e) {
-            die("Database Error: " . $e->getMessage());
-        }
+      // 4. إنشاء الجداول الأساسية لو مش موجودة (Self-Healing)
+      $this->createTables();
+      $this->migrateTables();
+    } catch (PDOException $e) {
+      die("Database Error: " . $e->getMessage());
     }
+  }
 
-    public static function getInstance()
-    {
-        if (!self::$instance) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+  public static function getInstance()
+  {
+    if (!self::$instance) {
+      self::$instance = new self();
     }
+    return self::$instance;
+  }
 
-    public function getConnection()
-    {
-        return $this->connection;
-    }
+  public function getConnection()
+  {
+    return $this->connection;
+  }
 
-    private function createTables()
-    {
-        $sql = "
+  private function createTables()
+  {
+    $sql = "
+    
+
         CREATE TABLE IF NOT EXISTS `users` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
           `username` varchar(100) NOT NULL,
@@ -163,6 +165,23 @@ class Database
           `notes` text DEFAULT NULL,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+         
+         CREATE TABLE IF NOT EXISTS `kyc_verifications` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `user_id` int(11) NOT NULL,
+    `name` varchar(150) NOT NULL,
+    `email` varchar(100) NOT NULL,
+    `role` enum('vet','service_provider') NOT NULL,
+    `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    `submitted_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `reviewed_at` timestamp NULL DEFAULT NULL,
+    `reviewed_by` int(11) DEFAULT NULL,
+    `note` text DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `user_id` (`user_id`),
+    KEY `status` (`status`),
+    CONSTRAINT `kyc_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
         CREATE TABLE IF NOT EXISTS `operating_rooms` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -261,6 +280,8 @@ class Database
           `id` int(11) NOT NULL AUTO_INCREMENT,
           `name` varchar(50) NOT NULL,
           `balance` double NOT NULL DEFAULT 0,
+          `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000,
+          `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
           `is_active` tinyint(1) NOT NULL DEFAULT 1,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -286,15 +307,105 @@ class Database
           PRIMARY KEY (id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+        CREATE TABLE IF NOT EXISTS `vendor_payments` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `order_id` int(11) NOT NULL,
+          `vendor_id` int(11) NOT NULL,
+          `subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000,
+          `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+          `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `platform_total` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `payment_method` varchar(30) NOT NULL DEFAULT 'online',
+          `payment_status` varchar(30) NOT NULL DEFAULT 'paid',
+          `payout_status` varchar(30) NOT NULL DEFAULT 'pending',
+          `paid_at` datetime DEFAULT NULL,
+          `payout_released_at` datetime DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`),
+          KEY `order_id` (`order_id`),
+          KEY `vendor_id` (`vendor_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
         CREATE TABLE IF NOT EXISTS `services` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
           `provider_id` int(11) DEFAULT NULL,
           `name` varchar(100) NOT NULL DEFAULT '',
           `category` varchar(50) DEFAULT NULL,
+          `price` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `duration` varchar(50) DEFAULT NULL,
+          `performed_by` enum('Vet','Provider') DEFAULT 'Vet',
           `description` text DEFAULT NULL,
           `discount_percentage` double NOT NULL DEFAULT 0,
+          `status` varchar(20) NOT NULL DEFAULT 'active',
           `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
           PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `service_bookings` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `owner_id` int(11) NOT NULL,
+          `provider_id` int(11) NOT NULL,
+          `service_id` int(11) NOT NULL,
+          `pet_id` int(11) DEFAULT NULL,
+          `status` varchar(30) NOT NULL DEFAULT 'scheduled',
+          `booked_at` datetime NOT NULL DEFAULT current_timestamp(),
+          `completed_at` datetime DEFAULT NULL,
+          `notes` text DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`),
+          KEY `provider_id` (`provider_id`),
+          KEY `owner_id` (`owner_id`),
+          KEY `service_id` (`service_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `service_completion_reports` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `booking_id` int(11) NOT NULL,
+          `provider_id` int(11) NOT NULL,
+          `owner_id` int(11) NOT NULL,
+          `service_id` int(11) NOT NULL,
+          `report_title` varchar(160) NOT NULL,
+          `report_details` text DEFAULT NULL,
+          `report_status` varchar(30) NOT NULL DEFAULT 'submitted',
+          `created_by` int(11) DEFAULT NULL,
+          `admin_confirmed_at` datetime DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`),
+          KEY `booking_id` (`booking_id`),
+          KEY `provider_id` (`provider_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `provider_payments` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `booking_id` int(11) NOT NULL,
+          `report_id` int(11) DEFAULT NULL,
+          `provider_id` int(11) NOT NULL,
+          `owner_id` int(11) NOT NULL,
+          `service_id` int(11) NOT NULL,
+          `base_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500,
+          `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+          `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+          `payment_method` varchar(30) NOT NULL DEFAULT 'cash',
+          `payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash',
+          `transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred',
+          `paid_at` datetime DEFAULT NULL,
+          `transferred_at` datetime DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`id`),
+          KEY `provider_id` (`provider_id`),
+          KEY `booking_id` (`booking_id`),
+          KEY `report_id` (`report_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
         CREATE TABLE IF NOT EXISTS `reviews` (
@@ -425,147 +536,327 @@ class Database
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+        CREATE TABLE IF NOT EXISTS `disputes` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `user_name` varchar(100) NOT NULL,
+            `provider_name` varchar(100) NOT NULL,
+            `issue` text NOT NULL,
+            `status` enum('pending','resolved') NOT NULL DEFAULT 'pending',
+            `amount` decimal(10,2) DEFAULT 0.00,
+            `date` date DEFAULT NULL,
+            `user_msg` text DEFAULT NULL,
+            `provider_resp` text DEFAULT NULL,
+            `resolution` varchar(255) DEFAULT NULL,
+            `admin_note` text DEFAULT NULL,
+            `resolved_at` timestamp NULL DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
         ";
 
-        $this->connection->exec($sql);
+    $this->connection->exec($sql);
+  }
+
+  private function migrateTables()
+  {
+    
+    $this->addColumnIfMissing('users', 'username', "`username` varchar(100) NOT NULL DEFAULT '' AFTER `id`");
+    $this->addColumnIfMissing('users', 'phone', "`phone` varchar(20) DEFAULT NULL AFTER `email`");
+    $this->addColumnIfMissing('users', 'password', "`password` varchar(255) NOT NULL DEFAULT '' AFTER `phone`");
+    $this->addColumnIfMissing('users', 'image', "`image` varchar(255) DEFAULT 'default.png' AFTER `password`");
+    $this->addColumnIfMissing('users', 'role', "`role` enum('pet_owner','admin','service_provider','vet') DEFAULT 'pet_owner' AFTER `image`");
+    $this->addColumnIfMissing('users', 'status', "`status` varchar(20) NOT NULL DEFAULT 'active' AFTER `role`");
+    $this->addColumnIfMissing('users', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `role`");
+    $this->backfillUsernames();
+    $this->connection->exec("ALTER TABLE `users` MODIFY `password` varchar(255) NOT NULL");
+    $this->connection->exec("ALTER TABLE `users` MODIFY `username` varchar(100) NOT NULL");
+    $this->connection->exec("ALTER TABLE `users` MODIFY `status` varchar(20) NOT NULL DEFAULT 'active'");
+    $this->relaxLegacyNameColumn();
+
+    $this->addColumnIfMissing('pet_owners', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('pet_owners', 'address', "`address` varchar(255) NOT NULL DEFAULT '' AFTER `user_id`");
+    $this->connection->exec("ALTER TABLE `pet_owners` MODIFY `address` varchar(255) NOT NULL DEFAULT ''");
+
+    $this->addColumnIfMissing('pets', 'image', "`image` varchar(255) DEFAULT 'default-pet.png' AFTER `age`");
+    $this->addColumnIfMissing('pets', 'breed', "`breed` varchar(100) DEFAULT '' AFTER `species`");
+    $this->addColumnIfMissing('pets', 'gender', "`gender` varchar(20) DEFAULT 'Unknown' AFTER `age`");
+    $this->addColumnIfMissing('pets', 'weight', "`weight` decimal(5,2) NOT NULL DEFAULT 0.00 AFTER `gender`");
+    $this->addColumnIfMissing('pets', 'color', "`color` varchar(50) DEFAULT '' AFTER `weight`");
+    $this->addColumnIfMissing('pets', 'allergies', "allergies text DEFAULT NULL AFTER medical_notes");
+    $this->addColumnIfMissing('pets', 'medical_notes', "`medical_notes` text AFTER `color`");
+    $this->addColumnIfMissing('pets', 'vaccination_status', "`vaccination_status` varchar(50) DEFAULT 'Unknown' AFTER `medical_notes`");
+    $this->addColumnIfMissing('pets', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `image`");
+
+    $this->addColumnIfMissing('admins', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('veterinarians', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('veterinarians', 'license_number', "`license_number` varchar(50) NOT NULL DEFAULT '' AFTER `user_id`");
+    $this->addColumnIfMissing('veterinarians', 'specialization', "`specialization` varchar(100) NOT NULL DEFAULT '' AFTER `license_number`");
+    $this->addColumnIfMissing('veterinarians', 'clinic_address', "`clinic_address` varchar(255) NOT NULL DEFAULT '' AFTER `specialization`");
+    $this->addColumnIfMissing('service_providers', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('service_providers', 'business_name', "`business_name` varchar(150) NOT NULL DEFAULT '' AFTER `user_id`");
+    $this->addColumnIfMissing('service_providers', 'service_type', "`service_type` varchar(50) NOT NULL DEFAULT '' AFTER `business_name`");
+    $this->addColumnIfMissing('service_providers', 'rating', "`rating` double NOT NULL DEFAULT 0 AFTER `service_type`");
+    $this->addColumnIfMissing('kyc_verifications', 'reviewed_by', "`reviewed_by` int(11) DEFAULT NULL AFTER `reviewed_at`");
+    $this->addColumnIfMissing('kyc_verifications', 'note', "`note` text DEFAULT NULL AFTER `reviewed_by`");
+
+    // Services Table Full Migration
+    $this->addColumnIfMissing('services', 'provider_id', "`provider_id` int(11) DEFAULT NULL AFTER `id`");
+    $this->addColumnIfMissing('services', 'name', "`name` varchar(100) NOT NULL DEFAULT '' AFTER `provider_id`");
+    $this->addColumnIfMissing('services', 'category', "`category` varchar(50) DEFAULT NULL AFTER `name`");
+    $this->addColumnIfMissing('services', 'price', "`price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `category`");
+    $this->addColumnIfMissing('services', 'duration', "`duration` varchar(50) DEFAULT NULL AFTER `price`");
+    $this->addColumnIfMissing('services', 'performed_by', "`performed_by` enum('Vet','Provider') DEFAULT 'Vet' AFTER `duration`");
+    $this->addColumnIfMissing('services', 'description', "`description` text DEFAULT NULL AFTER `performed_by`");
+    $this->addColumnIfMissing('services', 'discount_percentage', "`discount_percentage` decimal(5,2) NOT NULL DEFAULT 0.00 AFTER `description`");
+    $this->addColumnIfMissing('services', 'status', "`status` varchar(20) NOT NULL DEFAULT 'active' AFTER `discount_percentage`");
+    $this->addColumnIfMissing('services', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`");
+
+    $this->connection->exec("ALTER TABLE `services` MODIFY `provider_id` int(11) DEFAULT NULL");
+    $this->connection->exec("ALTER TABLE `services` MODIFY `discount_percentage` decimal(5,2) NOT NULL DEFAULT 0.00");
+    $this->backfillServices();
+
+    $this->connection->exec("
+            CREATE TABLE IF NOT EXISTS `service_bookings` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `owner_id` int(11) NOT NULL,
+              `provider_id` int(11) NOT NULL,
+              `service_id` int(11) NOT NULL,
+              `pet_id` int(11) DEFAULT NULL,
+              `status` varchar(30) NOT NULL DEFAULT 'scheduled',
+              `booked_at` datetime NOT NULL DEFAULT current_timestamp(),
+              `completed_at` datetime DEFAULT NULL,
+              `notes` text DEFAULT NULL,
+              `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    $this->addColumnIfMissing('service_bookings', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('service_bookings', 'provider_id', "`provider_id` int(11) NOT NULL AFTER `owner_id`");
+    $this->addColumnIfMissing('service_bookings', 'service_id', "`service_id` int(11) NOT NULL AFTER `provider_id`");
+    $this->addColumnIfMissing('service_bookings', 'pet_id', "`pet_id` int(11) DEFAULT NULL AFTER `service_id`");
+    $this->addColumnIfMissing('service_bookings', 'status', "`status` varchar(30) NOT NULL DEFAULT 'scheduled' AFTER `pet_id`");
+    $this->addColumnIfMissing('service_bookings', 'booked_at', "`booked_at` datetime NOT NULL DEFAULT current_timestamp() AFTER `status`");
+    $this->addColumnIfMissing('service_bookings', 'completed_at', "`completed_at` datetime DEFAULT NULL AFTER `booked_at`");
+    $this->addColumnIfMissing('service_bookings', 'notes', "`notes` text DEFAULT NULL AFTER `completed_at`");
+    $this->addColumnIfMissing('service_bookings', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `notes`");
+
+    $this->connection->exec("
+            CREATE TABLE IF NOT EXISTS `service_completion_reports` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `booking_id` int(11) NOT NULL,
+              `provider_id` int(11) NOT NULL,
+              `owner_id` int(11) NOT NULL,
+              `service_id` int(11) NOT NULL,
+              `report_title` varchar(160) NOT NULL,
+              `report_details` text DEFAULT NULL,
+              `report_status` varchar(30) NOT NULL DEFAULT 'submitted',
+              `created_by` int(11) DEFAULT NULL,
+              `admin_confirmed_at` datetime DEFAULT NULL,
+              `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    $this->addColumnIfMissing('service_completion_reports', 'booking_id', "`booking_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('service_completion_reports', 'provider_id', "`provider_id` int(11) NOT NULL AFTER `booking_id`");
+    $this->addColumnIfMissing('service_completion_reports', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `provider_id`");
+    $this->addColumnIfMissing('service_completion_reports', 'service_id', "`service_id` int(11) NOT NULL AFTER `owner_id`");
+    $this->addColumnIfMissing('service_completion_reports', 'report_title', "`report_title` varchar(160) NOT NULL AFTER `service_id`");
+    $this->addColumnIfMissing('service_completion_reports', 'report_details', "`report_details` text DEFAULT NULL AFTER `report_title`");
+    $this->addColumnIfMissing('service_completion_reports', 'report_status', "`report_status` varchar(30) NOT NULL DEFAULT 'submitted' AFTER `report_details`");
+    $this->addColumnIfMissing('service_completion_reports', 'created_by', "`created_by` int(11) DEFAULT NULL AFTER `report_status`");
+    $this->addColumnIfMissing('service_completion_reports', 'admin_confirmed_at', "`admin_confirmed_at` datetime DEFAULT NULL AFTER `created_by`");
+    $this->addColumnIfMissing('service_completion_reports', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `admin_confirmed_at`");
+
+    $this->connection->exec("
+            CREATE TABLE IF NOT EXISTS `provider_payments` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `booking_id` int(11) NOT NULL,
+              `report_id` int(11) DEFAULT NULL,
+              `provider_id` int(11) NOT NULL,
+              `owner_id` int(11) NOT NULL,
+              `service_id` int(11) NOT NULL,
+              `base_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500,
+              `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+              `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `payment_method` varchar(30) NOT NULL DEFAULT 'cash',
+              `payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash',
+              `transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred',
+              `paid_at` datetime DEFAULT NULL,
+              `transferred_at` datetime DEFAULT NULL,
+              `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    foreach ([
+      'booking_id' => "`booking_id` int(11) NOT NULL AFTER `id`",
+      'report_id' => "`report_id` int(11) DEFAULT NULL AFTER `booking_id`",
+      'provider_id' => "`provider_id` int(11) NOT NULL AFTER `report_id`",
+      'owner_id' => "`owner_id` int(11) NOT NULL AFTER `provider_id`",
+      'service_id' => "`service_id` int(11) NOT NULL AFTER `owner_id`",
+      'base_price' => "`base_price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `service_id`",
+      'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500 AFTER `base_price`",
+      'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
+      'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
+      'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
+      'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
+      'provider_earning' => "`provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `gross_amount`",
+      'platform_total_due' => "`platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `provider_earning`",
+      'cash_received_amount' => "`cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `platform_total_due`",
+      'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'cash' AFTER `cash_received_amount`",
+      'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash' AFTER `payment_method`",
+      'transfer_status' => "`transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred' AFTER `payment_status`",
+      'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `transfer_status`",
+      'transferred_at' => "`transferred_at` datetime DEFAULT NULL AFTER `paid_at`",
+      'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `transferred_at`"
+    ] as $column => $definition) {
+      $this->addColumnIfMissing('provider_payments', $column, $definition);
     }
 
-    private function migrateTables()
-    {
-        $this->addColumnIfMissing('users', 'username', "`username` varchar(100) NOT NULL DEFAULT '' AFTER `id`");
-        $this->addColumnIfMissing('users', 'phone', "`phone` varchar(20) DEFAULT NULL AFTER `email`");
-        $this->addColumnIfMissing('users', 'password', "`password` varchar(255) NOT NULL DEFAULT '' AFTER `phone`");
-        $this->addColumnIfMissing('users', 'image', "`image` varchar(255) DEFAULT 'default.png' AFTER `password`");
-        $this->addColumnIfMissing('users', 'role', "`role` enum('pet_owner','admin','service_provider','vet') DEFAULT 'pet_owner' AFTER `image`");
-        $this->addColumnIfMissing('users', 'status', "`status` varchar(20) NOT NULL DEFAULT 'active' AFTER `role`");
-        $this->addColumnIfMissing('users', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `role`");
-        $this->backfillUsernames();
-        $this->connection->exec("ALTER TABLE `users` MODIFY `password` varchar(255) NOT NULL");
-        $this->connection->exec("ALTER TABLE `users` MODIFY `username` varchar(100) NOT NULL");
-        $this->connection->exec("ALTER TABLE `users` MODIFY `status` varchar(20) NOT NULL DEFAULT 'active'");
-        $this->relaxLegacyNameColumn();
+    $this->addColumnIfMissing('reviews', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('reviews', 'service_id', "`service_id` int(11) NOT NULL AFTER `owner_id`");
+    $this->addColumnIfMissing('reviews', 'rating', "`rating` int(11) NOT NULL DEFAULT 5 AFTER `service_id`");
+    $this->addColumnIfMissing('reviews', 'comment', "`comment` text DEFAULT NULL AFTER `rating`");
+    $this->addColumnIfMissing('reviews', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `comment`");
 
-        $this->addColumnIfMissing('pet_owners', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('pet_owners', 'address', "`address` varchar(255) NOT NULL DEFAULT '' AFTER `user_id`");
-        $this->connection->exec("ALTER TABLE `pet_owners` MODIFY `address` varchar(255) NOT NULL DEFAULT ''");
+    $this->addColumnIfMissing('vendors', 'name', "name varchar(50) NOT NULL DEFAULT '' AFTER id");
+    $this->addColumnIfMissing('vendors', 'balance', "balance double NOT NULL DEFAULT 0 AFTER name");
+    $this->addColumnIfMissing('vendors', 'commission_rate', "commission_rate decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER balance");
+    $this->addColumnIfMissing('vendors', 'tax_rate', "tax_rate decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER commission_rate");
+    $this->addColumnIfMissing('vendors', 'is_active', "is_active tinyint(1) NOT NULL DEFAULT 1 AFTER tax_rate");
+    $this->addColumnIfMissing('orders', 'owner_id', "owner_id int(11) NOT NULL AFTER id");
+    $this->addColumnIfMissing('orders', 'vendor_id', "vendor_id int(11) NOT NULL AFTER owner_id");
+    $this->addColumnIfMissing('orders', 'total_price', "total_price double NOT NULL DEFAULT 0 AFTER vendor_id");
+    $this->addColumnIfMissing('orders', 'status', "status varchar(20) NOT NULL DEFAULT 'pending' AFTER total_price");
+    $this->addColumnIfMissing('orders', 'is_recurring', "is_recurring tinyint(1) NOT NULL DEFAULT 0 AFTER status");
+    $this->addColumnIfMissing('orders', 'delivery_date', "delivery_date date DEFAULT NULL AFTER is_recurring");
 
-        $this->addColumnIfMissing('pets', 'image', "`image` varchar(255) DEFAULT 'default-pet.png' AFTER `age`");
-        $this->addColumnIfMissing('pets', 'breed', "`breed` varchar(100) DEFAULT '' AFTER `species`");
-        $this->addColumnIfMissing('pets', 'gender', "`gender` varchar(20) DEFAULT 'Unknown' AFTER `age`");
-        $this->addColumnIfMissing('pets', 'weight', "`weight` decimal(5,2) NOT NULL DEFAULT 0.00 AFTER `gender`");
-        $this->addColumnIfMissing('pets', 'color', "`color` varchar(50) DEFAULT '' AFTER `weight`");
-        $this->addColumnIfMissing('pets', 'allergies', "allergies text DEFAULT NULL AFTER medical_notes");
-        $this->addColumnIfMissing('pets', 'medical_notes', "`medical_notes` text AFTER `color`");
-        $this->addColumnIfMissing('pets', 'vaccination_status', "`vaccination_status` varchar(50) DEFAULT 'Unknown' AFTER `medical_notes`");
-        $this->addColumnIfMissing('pets', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `image`");
+    $this->addColumnIfMissing('order_items', 'order_id', "order_id int(11) NOT NULL AFTER id");
+    $this->addColumnIfMissing('order_items', 'product_name', "product_name varchar(150) NOT NULL AFTER order_id");
+    $this->addColumnIfMissing('order_items', 'price', "price double NOT NULL DEFAULT 0 AFTER product_name");
+    $this->addColumnIfMissing('order_items', 'quantity', "quantity int(11) NOT NULL DEFAULT 1 AFTER price");
+    $this->addColumnIfMissing('order_items', 'availability_status', "availability_status varchar(20) NOT NULL DEFAULT 'pending' AFTER quantity");
+    $this->addColumnIfMissing('order_items', 'points', "points int(11) NOT NULL DEFAULT 0 AFTER availability_status");
 
-        $this->addColumnIfMissing('admins', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('veterinarians', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('veterinarians', 'license_number', "`license_number` varchar(50) NOT NULL DEFAULT '' AFTER `user_id`");
-        $this->addColumnIfMissing('veterinarians', 'specialization', "`specialization` varchar(100) NOT NULL DEFAULT '' AFTER `license_number`");
-        $this->addColumnIfMissing('veterinarians', 'clinic_address', "`clinic_address` varchar(255) NOT NULL DEFAULT '' AFTER `specialization`");
-        $this->addColumnIfMissing('service_providers', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('service_providers', 'business_name', "`business_name` varchar(150) NOT NULL DEFAULT '' AFTER `user_id`");
-        $this->addColumnIfMissing('service_providers', 'service_type', "`service_type` varchar(50) NOT NULL DEFAULT '' AFTER `business_name`");
-        $this->addColumnIfMissing('service_providers', 'rating', "`rating` double NOT NULL DEFAULT 0 AFTER `service_type`");
+    $this->connection->exec("
+            CREATE TABLE IF NOT EXISTS `vendor_payments` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `order_id` int(11) NOT NULL,
+              `vendor_id` int(11) NOT NULL,
+              `subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000,
+              `commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
+              `tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `platform_total` decimal(10,2) NOT NULL DEFAULT 0.00,
+              `payment_method` varchar(30) NOT NULL DEFAULT 'online',
+              `payment_status` varchar(30) NOT NULL DEFAULT 'paid',
+              `payout_status` varchar(30) NOT NULL DEFAULT 'pending',
+              `paid_at` datetime DEFAULT NULL,
+              `payout_released_at` datetime DEFAULT NULL,
+              `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+    foreach ([
+      'order_id' => "`order_id` int(11) NOT NULL AFTER `id`",
+      'vendor_id' => "`vendor_id` int(11) NOT NULL AFTER `order_id`",
+      'subtotal_amount' => "`subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_id`",
+      'discount_amount' => "`discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `subtotal_amount`",
+      'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `discount_amount`",
+      'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER `gross_amount`",
+      'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
+      'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
+      'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
+      'vendor_payout' => "`vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
+      'platform_total' => "`platform_total` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_payout`",
+      'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'online' AFTER `platform_total`",
+      'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'paid' AFTER `payment_method`",
+      'payout_status' => "`payout_status` varchar(30) NOT NULL DEFAULT 'pending' AFTER `payment_status`",
+      'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `payout_status`",
+      'payout_released_at' => "`payout_released_at` datetime DEFAULT NULL AFTER `paid_at`",
+      'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `payout_released_at`"
+    ] as $column => $definition) {
+      $this->addColumnIfMissing('vendor_payments', $column, $definition);
+    }
 
-        $this->addColumnIfMissing('services', 'provider_id', "`provider_id` int(11) DEFAULT NULL AFTER `id`");
-        $this->addColumnIfMissing('services', 'name', "`name` varchar(100) NOT NULL DEFAULT '' AFTER `provider_id`");
-        $this->addColumnIfMissing('services', 'category', "`category` varchar(50) DEFAULT NULL AFTER `name`");
-        $this->addColumnIfMissing('services', 'description', "`description` text DEFAULT NULL AFTER `category`");
-        $this->addColumnIfMissing('services', 'discount_percentage', "`discount_percentage` double NOT NULL DEFAULT 0 AFTER `description`");
-        $this->addColumnIfMissing('services', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `discount_percentage`");
-        $this->connection->exec("ALTER TABLE `services` MODIFY `provider_id` int(11) DEFAULT NULL");
-        $this->connection->exec("ALTER TABLE `services` MODIFY `discount_percentage` double NOT NULL DEFAULT 0");
-        $this->backfillServices();
+    $this->addColumnIfMissing('marketplace_items', 'name', "`name` varchar(255) NOT NULL DEFAULT '' AFTER `id`");
+    $this->addColumnIfMissing('marketplace_items', 'short_description', "`short_description` text DEFAULT NULL AFTER `name`");
+    $this->addColumnIfMissing('marketplace_items', 'price', "`price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `short_description`");
+    $this->addColumnIfMissing('marketplace_items', 'category', "`category` varchar(100) DEFAULT NULL AFTER `price`");
+    $this->addColumnIfMissing('marketplace_items', 'image', "`image` varchar(255) DEFAULT NULL AFTER `category`");
+    $this->addColumnIfMissing('marketplace_items', 'rating', "`rating` decimal(2,1) NOT NULL DEFAULT 0.0 AFTER `image`");
+    $this->addColumnIfMissing('marketplace_items', 'stock', "`stock` int(11) NOT NULL DEFAULT 0 AFTER `rating`");
+    $this->addColumnIfMissing('marketplace_items', 'is_recommended', "`is_recommended` tinyint(1) NOT NULL DEFAULT 1 AFTER `stock`");
+    $this->addColumnIfMissing('marketplace_items', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `is_recommended`");
+    $this->seedMarketplaceItems();
 
-        $this->addColumnIfMissing('reviews', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('reviews', 'service_id', "`service_id` int(11) NOT NULL AFTER `owner_id`");
-        $this->addColumnIfMissing('reviews', 'rating', "`rating` int(11) NOT NULL DEFAULT 5 AFTER `service_id`");
-        $this->addColumnIfMissing('reviews', 'comment', "`comment` text DEFAULT NULL AFTER `rating`");
-        $this->addColumnIfMissing('reviews', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `comment`");
+    if ($this->tableExists('activity_lists')) {
+      $this->addColumnIfMissing('activity_lists', 'occurred_at', "`occurred_at` timestamp NOT NULL DEFAULT current_timestamp()");
+    }
 
-        $this->addColumnIfMissing('vendors', 'name', "name varchar(50) NOT NULL DEFAULT '' AFTER id");
-        $this->addColumnIfMissing('vendors', 'balance', "balance double NOT NULL DEFAULT 0 AFTER name");
-        $this->addColumnIfMissing('vendors', 'is_active', "is_active tinyint(1) NOT NULL DEFAULT 1 AFTER balance");
-        $this->addColumnIfMissing('orders', 'owner_id', "owner_id int(11) NOT NULL AFTER id");
-        $this->addColumnIfMissing('orders', 'vendor_id', "vendor_id int(11) NOT NULL AFTER owner_id");
-        $this->addColumnIfMissing('orders', 'total_price', "total_price double NOT NULL DEFAULT 0 AFTER vendor_id");
-        $this->addColumnIfMissing('orders', 'is_recurring', "is_recurring tinyint(1) NOT NULL DEFAULT 0 AFTER status");
-        $this->addColumnIfMissing('orders', 'delivery_date', "delivery_date date DEFAULT NULL AFTER is_recurring");
+    $this->addColumnIfMissing('medical_procedures', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('medical_procedures', 'vet_id', "`vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
+    $this->addColumnIfMissing('medical_procedures', 'procedure_name', "`procedure_name` varchar(120) NOT NULL AFTER `vet_id`");
+    $this->addColumnIfMissing('medical_procedures', 'procedure_type', "`procedure_type` varchar(80) DEFAULT NULL AFTER `procedure_name`");
+    $this->addColumnIfMissing('medical_procedures', 'status', "`status` varchar(40) DEFAULT 'scheduled' AFTER `procedure_type`");
+    $this->addColumnIfMissing('medical_procedures', 'procedure_date', "`procedure_date` date DEFAULT NULL AFTER `status`");
+    $this->addColumnIfMissing('medical_procedures', 'notes', "`notes` text DEFAULT NULL AFTER `procedure_date`");
+    $this->addColumnIfMissing('medical_procedures', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `notes`");
+    $this->addColumnIfMissing('medical_procedures', 'room', "`room` varchar(50) DEFAULT NULL AFTER `procedure_date`");
+    $this->addColumnIfMissing('medical_procedures', 'scheduled_time', "`scheduled_time` time DEFAULT NULL AFTER `room`");
+    $this->addColumnIfMissing('medical_procedures', 'approved_by', "`approved_by` int(11) DEFAULT NULL AFTER `scheduled_time`");
 
-        $this->addColumnIfMissing('order_items', 'order_id', "order_id int(11) NOT NULL AFTER id");
-        $this->addColumnIfMissing('order_items', 'product_name', "product_name varchar(150) NOT NULL AFTER order_id");
-        $this->addColumnIfMissing('order_items', 'price', "price double NOT NULL DEFAULT 0 AFTER product_name");
-        $this->addColumnIfMissing('order_items', 'quantity', "quantity int(11) NOT NULL DEFAULT 1 AFTER price");
-        $this->addColumnIfMissing('order_items', 'availability_status', "availability_status varchar(20) NOT NULL DEFAULT 'pending' AFTER quantity");
-        $this->addColumnIfMissing('order_items', 'points', "points int(11) NOT NULL DEFAULT 0 AFTER availability_status");
+    $this->addColumnIfMissing('lab_reports', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('lab_reports', 'vet_id', "`vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
+    $this->addColumnIfMissing('lab_reports', 'test_name', "`test_name` varchar(120) NOT NULL AFTER `vet_id`");
+    $this->addColumnIfMissing('lab_reports', 'result_summary', "`result_summary` varchar(255) DEFAULT NULL AFTER `test_name`");
+    $this->addColumnIfMissing('lab_reports', 'interpretation', "`interpretation` text DEFAULT NULL AFTER `result_summary`");
+    $this->addColumnIfMissing('lab_reports', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `interpretation`");
+    $this->addColumnIfMissing('lab_reports', 'report_date', "`report_date` date DEFAULT NULL AFTER `status`");
+    $this->addColumnIfMissing('lab_reports', 'file_path', "`file_path` varchar(255) DEFAULT NULL AFTER `report_date`");
+    $this->addColumnIfMissing('lab_reports', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `file_path`");
 
-        $this->addColumnIfMissing('marketplace_items', 'name', "`name` varchar(255) NOT NULL DEFAULT '' AFTER `id`");
-        $this->addColumnIfMissing('marketplace_items', 'short_description', "`short_description` text DEFAULT NULL AFTER `name`");
-        $this->addColumnIfMissing('marketplace_items', 'price', "`price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `short_description`");
-        $this->addColumnIfMissing('marketplace_items', 'category', "`category` varchar(100) DEFAULT NULL AFTER `price`");
-        $this->addColumnIfMissing('marketplace_items', 'image', "`image` varchar(255) DEFAULT NULL AFTER `category`");
-        $this->addColumnIfMissing('marketplace_items', 'rating', "`rating` decimal(2,1) NOT NULL DEFAULT 0.0 AFTER `image`");
-        $this->addColumnIfMissing('marketplace_items', 'stock', "`stock` int(11) NOT NULL DEFAULT 0 AFTER `rating`");
-        $this->addColumnIfMissing('marketplace_items', 'is_recommended', "`is_recommended` tinyint(1) NOT NULL DEFAULT 1 AFTER `stock`");
-        $this->addColumnIfMissing('marketplace_items', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `is_recommended`");
-        $this->seedMarketplaceItems();
+    $this->addColumnIfMissing('referrals', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('referrals', 'from_vet_id', "`from_vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
+    $this->addColumnIfMissing('referrals', 'to_vet_id', "`to_vet_id` int(11) DEFAULT NULL AFTER `from_vet_id`");
+    $this->addColumnIfMissing('referrals', 'specialty', "`specialty` varchar(120) DEFAULT NULL AFTER `to_vet_id`");
+    $this->addColumnIfMissing('referrals', 'reason', "`reason` text DEFAULT NULL AFTER `specialty`");
+    $this->addColumnIfMissing('referrals', 'priority', "`priority` varchar(40) DEFAULT 'normal' AFTER `reason`");
+    $this->addColumnIfMissing('referrals', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `priority`");
+    $this->addColumnIfMissing('referrals', 'requested_at', "`requested_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`");
+    $this->addColumnIfMissing('referrals', 'notes', "`notes` text DEFAULT NULL AFTER `requested_at`");
 
-        if ($this->tableExists('activity_lists')) {
-            $this->addColumnIfMissing('activity_lists', 'occurred_at', "`occurred_at` timestamp NOT NULL DEFAULT current_timestamp()");
-        }
+    $this->addColumnIfMissing('audit_logs', 'user_id', "`user_id` int(11) DEFAULT NULL AFTER `id`");
+    $this->addColumnIfMissing('audit_logs', 'admin_id', "`admin_id` int(11) DEFAULT NULL AFTER `user_id`");
+    $this->addColumnIfMissing('audit_logs', 'entity_type', "`entity_type` varchar(80) DEFAULT NULL AFTER `admin_id`");
+    $this->addColumnIfMissing('audit_logs', 'entity_id', "`entity_id` int(11) DEFAULT NULL AFTER `entity_type`");
+    $this->addColumnIfMissing('audit_logs', 'action', "`action` varchar(50) NOT NULL AFTER `entity_id`");
+    $this->addColumnIfMissing('audit_logs', 'details', "`details` text DEFAULT NULL AFTER `action`");
+    $this->addColumnIfMissing('audit_logs', 'ip_address', "`ip_address` varchar(45) DEFAULT NULL AFTER `details`");
+    $this->addColumnIfMissing('audit_logs', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `ip_address`");
+    $this->connection->exec("ALTER TABLE `audit_logs` MODIFY `admin_id` int(11) DEFAULT NULL");
+    $this->connection->exec("ALTER TABLE `audit_logs` MODIFY `details` text DEFAULT NULL");
 
-        $this->addColumnIfMissing('medical_procedures', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('medical_procedures', 'vet_id', "`vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
-        $this->addColumnIfMissing('medical_procedures', 'procedure_name', "`procedure_name` varchar(120) NOT NULL AFTER `vet_id`");
-        $this->addColumnIfMissing('medical_procedures', 'procedure_type', "`procedure_type` varchar(80) DEFAULT NULL AFTER `procedure_name`");
-        $this->addColumnIfMissing('medical_procedures', 'status', "`status` varchar(40) DEFAULT 'scheduled' AFTER `procedure_type`");
-        $this->addColumnIfMissing('medical_procedures', 'procedure_date', "`procedure_date` date DEFAULT NULL AFTER `status`");
-        $this->addColumnIfMissing('medical_procedures', 'notes', "`notes` text DEFAULT NULL AFTER `procedure_date`");
-        $this->addColumnIfMissing('medical_procedures', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `notes`");
+    $this->addColumnIfMissing('access_controls', 'subject_role', "`subject_role` varchar(50) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('access_controls', 'resource_type', "`resource_type` varchar(80) NOT NULL AFTER `subject_role`");
+    $this->addColumnIfMissing('access_controls', 'clinic_scope', "`clinic_scope` varchar(120) DEFAULT NULL AFTER `resource_type`");
+    $this->addColumnIfMissing('access_controls', 'permission_level', "`permission_level` varchar(50) NOT NULL DEFAULT 'view' AFTER `clinic_scope`");
+    $this->addColumnIfMissing('access_controls', 'access_duration', "`access_duration` varchar(80) DEFAULT NULL AFTER `permission_level`");
+    $this->addColumnIfMissing('access_controls', 'status', "`status` varchar(30) DEFAULT 'active' AFTER `access_duration`");
+    $this->addColumnIfMissing('access_controls', 'created_by', "`created_by` int(11) DEFAULT NULL AFTER `status`");
+    $this->addColumnIfMissing('access_controls', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `created_by`");
 
-        $this->addColumnIfMissing('lab_reports', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('lab_reports', 'vet_id', "`vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
-        $this->addColumnIfMissing('lab_reports', 'test_name', "`test_name` varchar(120) NOT NULL AFTER `vet_id`");
-        $this->addColumnIfMissing('lab_reports', 'result_summary', "`result_summary` varchar(255) DEFAULT NULL AFTER `test_name`");
-        $this->addColumnIfMissing('lab_reports', 'interpretation', "`interpretation` text DEFAULT NULL AFTER `result_summary`");
-        $this->addColumnIfMissing('lab_reports', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `interpretation`");
-        $this->addColumnIfMissing('lab_reports', 'report_date', "`report_date` date DEFAULT NULL AFTER `status`");
-        $this->addColumnIfMissing('lab_reports', 'file_path', "`file_path` varchar(255) DEFAULT NULL AFTER `report_date`");
-        $this->addColumnIfMissing('lab_reports', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `file_path`");
-
-        $this->addColumnIfMissing('referrals', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('referrals', 'from_vet_id', "`from_vet_id` int(11) DEFAULT NULL AFTER `pet_id`");
-        $this->addColumnIfMissing('referrals', 'to_vet_id', "`to_vet_id` int(11) DEFAULT NULL AFTER `from_vet_id`");
-        $this->addColumnIfMissing('referrals', 'specialty', "`specialty` varchar(120) DEFAULT NULL AFTER `to_vet_id`");
-        $this->addColumnIfMissing('referrals', 'reason', "`reason` text DEFAULT NULL AFTER `specialty`");
-        $this->addColumnIfMissing('referrals', 'priority', "`priority` varchar(40) DEFAULT 'normal' AFTER `reason`");
-        $this->addColumnIfMissing('referrals', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `priority`");
-        $this->addColumnIfMissing('referrals', 'requested_at', "`requested_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`");
-        $this->addColumnIfMissing('referrals', 'notes', "`notes` text DEFAULT NULL AFTER `requested_at`");
-
-        $this->addColumnIfMissing('audit_logs', 'user_id', "`user_id` int(11) DEFAULT NULL AFTER `id`");
-        $this->addColumnIfMissing('audit_logs', 'admin_id', "`admin_id` int(11) DEFAULT NULL AFTER `user_id`");
-        $this->addColumnIfMissing('audit_logs', 'entity_type', "`entity_type` varchar(80) DEFAULT NULL AFTER `admin_id`");
-        $this->addColumnIfMissing('audit_logs', 'entity_id', "`entity_id` int(11) DEFAULT NULL AFTER `entity_type`");
-        $this->addColumnIfMissing('audit_logs', 'action', "`action` varchar(50) NOT NULL AFTER `entity_id`");
-        $this->addColumnIfMissing('audit_logs', 'details', "`details` text DEFAULT NULL AFTER `action`");
-        $this->addColumnIfMissing('audit_logs', 'ip_address', "`ip_address` varchar(45) DEFAULT NULL AFTER `details`");
-        $this->addColumnIfMissing('audit_logs', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `ip_address`");
-        $this->connection->exec("ALTER TABLE `audit_logs` MODIFY `admin_id` int(11) DEFAULT NULL");
-        $this->connection->exec("ALTER TABLE `audit_logs` MODIFY `details` text DEFAULT NULL");
-
-        $this->addColumnIfMissing('access_controls', 'subject_role', "`subject_role` varchar(50) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('access_controls', 'resource_type', "`resource_type` varchar(80) NOT NULL AFTER `subject_role`");
-        $this->addColumnIfMissing('access_controls', 'clinic_scope', "`clinic_scope` varchar(120) DEFAULT NULL AFTER `resource_type`");
-        $this->addColumnIfMissing('access_controls', 'permission_level', "`permission_level` varchar(50) NOT NULL DEFAULT 'view' AFTER `clinic_scope`");
-        $this->addColumnIfMissing('access_controls', 'access_duration', "`access_duration` varchar(80) DEFAULT NULL AFTER `permission_level`");
-        $this->addColumnIfMissing('access_controls', 'status', "`status` varchar(30) DEFAULT 'active' AFTER `access_duration`");
-        $this->addColumnIfMissing('access_controls', 'created_by', "`created_by` int(11) DEFAULT NULL AFTER `status`");
-        $this->addColumnIfMissing('access_controls', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `created_by`");
-
-        $this->connection->exec("
+    $this->connection->exec("
             CREATE TABLE IF NOT EXISTS `vet_action_permissions` (
               `id` int(11) NOT NULL AUTO_INCREMENT,
               `vet_id` int(11) NOT NULL,
@@ -578,15 +869,15 @@ class Database
               PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
-        $this->addColumnIfMissing('vet_action_permissions', 'vet_id', "`vet_id` int(11) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('vet_action_permissions', 'action_key', "`action_key` varchar(80) NOT NULL AFTER `vet_id`");
-        $this->addColumnIfMissing('vet_action_permissions', 'access_mode', "`access_mode` varchar(40) NOT NULL DEFAULT 'request_admin' AFTER `action_key`");
-        $this->addColumnIfMissing('vet_action_permissions', 'is_active', "`is_active` tinyint(1) NOT NULL DEFAULT 1 AFTER `access_mode`");
-        $this->addColumnIfMissing('vet_action_permissions', 'notes', "`notes` text DEFAULT NULL AFTER `is_active`");
-        $this->addColumnIfMissing('vet_action_permissions', 'updated_by', "`updated_by` int(11) DEFAULT NULL AFTER `notes`");
-        $this->addColumnIfMissing('vet_action_permissions', 'updated_at', "`updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() AFTER `updated_by`");
+    $this->addColumnIfMissing('vet_action_permissions', 'vet_id', "`vet_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('vet_action_permissions', 'action_key', "`action_key` varchar(80) NOT NULL AFTER `vet_id`");
+    $this->addColumnIfMissing('vet_action_permissions', 'access_mode', "`access_mode` varchar(40) NOT NULL DEFAULT 'request_admin' AFTER `action_key`");
+    $this->addColumnIfMissing('vet_action_permissions', 'is_active', "`is_active` tinyint(1) NOT NULL DEFAULT 1 AFTER `access_mode`");
+    $this->addColumnIfMissing('vet_action_permissions', 'notes', "`notes` text DEFAULT NULL AFTER `is_active`");
+    $this->addColumnIfMissing('vet_action_permissions', 'updated_by', "`updated_by` int(11) DEFAULT NULL AFTER `notes`");
+    $this->addColumnIfMissing('vet_action_permissions', 'updated_at', "`updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() AFTER `updated_by`");
 
-        $this->connection->exec("
+    $this->connection->exec("
             CREATE TABLE IF NOT EXISTS `clinical_action_requests` (
               `id` int(11) NOT NULL AUTO_INCREMENT,
               `action_key` varchar(80) NOT NULL,
@@ -607,210 +898,210 @@ class Database
               PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
-        $this->addColumnIfMissing('clinical_action_requests', 'action_key', "`action_key` varchar(80) NOT NULL AFTER `id`");
-        $this->addColumnIfMissing('clinical_action_requests', 'action_title', "`action_title` varchar(150) NOT NULL AFTER `action_key`");
-        $this->addColumnIfMissing('clinical_action_requests', 'pet_id', "`pet_id` int(11) DEFAULT NULL AFTER `action_title`");
-        $this->addColumnIfMissing('clinical_action_requests', 'owner_user_id', "`owner_user_id` int(11) DEFAULT NULL AFTER `pet_id`");
-        $this->addColumnIfMissing('clinical_action_requests', 'requester_user_id', "`requester_user_id` int(11) NOT NULL AFTER `owner_user_id`");
-        $this->addColumnIfMissing('clinical_action_requests', 'requester_role', "`requester_role` varchar(30) NOT NULL DEFAULT 'vet' AFTER `requester_user_id`");
-        $this->addColumnIfMissing('clinical_action_requests', 'target_vet_id', "`target_vet_id` int(11) DEFAULT NULL AFTER `requester_role`");
-        $this->addColumnIfMissing('clinical_action_requests', 'owner_status', "`owner_status` varchar(30) NOT NULL DEFAULT 'not_needed' AFTER `target_vet_id`");
-        $this->addColumnIfMissing('clinical_action_requests', 'admin_status', "`admin_status` varchar(30) NOT NULL DEFAULT 'not_needed' AFTER `owner_status`");
-        $this->addColumnIfMissing('clinical_action_requests', 'request_status', "`request_status` varchar(30) NOT NULL DEFAULT 'pending' AFTER `admin_status`");
-        $this->addColumnIfMissing('clinical_action_requests', 'payload', "`payload` text DEFAULT NULL AFTER `request_status`");
-        $this->addColumnIfMissing('clinical_action_requests', 'notes', "`notes` text DEFAULT NULL AFTER `payload`");
-        $this->addColumnIfMissing('clinical_action_requests', 'decided_by', "`decided_by` int(11) DEFAULT NULL AFTER `notes`");
-        $this->addColumnIfMissing('clinical_action_requests', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `decided_by`");
-        $this->addColumnIfMissing('clinical_action_requests', 'updated_at', "`updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() AFTER `created_at`");
+    $this->addColumnIfMissing('clinical_action_requests', 'action_key', "`action_key` varchar(80) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('clinical_action_requests', 'action_title', "`action_title` varchar(150) NOT NULL AFTER `action_key`");
+    $this->addColumnIfMissing('clinical_action_requests', 'pet_id', "`pet_id` int(11) DEFAULT NULL AFTER `action_title`");
+    $this->addColumnIfMissing('clinical_action_requests', 'owner_user_id', "`owner_user_id` int(11) DEFAULT NULL AFTER `pet_id`");
+    $this->addColumnIfMissing('clinical_action_requests', 'requester_user_id', "`requester_user_id` int(11) NOT NULL AFTER `owner_user_id`");
+    $this->addColumnIfMissing('clinical_action_requests', 'requester_role', "`requester_role` varchar(30) NOT NULL DEFAULT 'vet' AFTER `requester_user_id`");
+    $this->addColumnIfMissing('clinical_action_requests', 'target_vet_id', "`target_vet_id` int(11) DEFAULT NULL AFTER `requester_role`");
+    $this->addColumnIfMissing('clinical_action_requests', 'owner_status', "`owner_status` varchar(30) NOT NULL DEFAULT 'not_needed' AFTER `target_vet_id`");
+    $this->addColumnIfMissing('clinical_action_requests', 'admin_status', "`admin_status` varchar(30) NOT NULL DEFAULT 'not_needed' AFTER `owner_status`");
+    $this->addColumnIfMissing('clinical_action_requests', 'request_status', "`request_status` varchar(30) NOT NULL DEFAULT 'pending' AFTER `admin_status`");
+    $this->addColumnIfMissing('clinical_action_requests', 'payload', "`payload` text DEFAULT NULL AFTER `request_status`");
+    $this->addColumnIfMissing('clinical_action_requests', 'notes', "`notes` text DEFAULT NULL AFTER `payload`");
+    $this->addColumnIfMissing('clinical_action_requests', 'decided_by', "`decided_by` int(11) DEFAULT NULL AFTER `notes`");
+    $this->addColumnIfMissing('clinical_action_requests', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `decided_by`");
+    $this->addColumnIfMissing('clinical_action_requests', 'updated_at', "`updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() AFTER `created_at`");
 
-        $this->seedVetActionPermissions();
-    }
+    $this->seedVetActionPermissions();
+  }
 
-    private function addColumnIfMissing($table, $column, $definition)
-    {
-        $stmt = $this->connection->prepare("
+  private function addColumnIfMissing($table, $column, $definition)
+  {
+    $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = ?
               AND COLUMN_NAME = ?
         ");
-        $stmt->execute([$table, $column]);
+    $stmt->execute([$table, $column]);
 
-        if ((int) $stmt->fetchColumn() === 0) {
-            $this->connection->exec("ALTER TABLE `$table` ADD COLUMN $definition");
-        }
+    if ((int) $stmt->fetchColumn() === 0) {
+      $this->connection->exec("ALTER TABLE `$table` ADD COLUMN $definition");
     }
+  }
 
-    private function columnExists($table, $column)
-    {
-        $stmt = $this->connection->prepare("
+  private function columnExists($table, $column)
+  {
+    $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = ?
               AND COLUMN_NAME = ?
         ");
-        $stmt->execute([$table, $column]);
-        return (int) $stmt->fetchColumn() > 0;
-    }
+    $stmt->execute([$table, $column]);
+    return (int) $stmt->fetchColumn() > 0;
+  }
 
-    private function tableExists($table)
-    {
-        $stmt = $this->connection->prepare("
+  private function tableExists($table)
+  {
+    $stmt = $this->connection->prepare("
             SELECT COUNT(*)
             FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA = DATABASE()
               AND TABLE_NAME = ?
         ");
-        $stmt->execute([$table]);
-        return (int) $stmt->fetchColumn() > 0;
-    }
+    $stmt->execute([$table]);
+    return (int) $stmt->fetchColumn() > 0;
+  }
 
-    private function backfillUsernames()
-    {
-        if ($this->columnExists('users', 'name')) {
-            $this->connection->exec("
+  private function backfillUsernames()
+  {
+    if ($this->columnExists('users', 'name')) {
+      $this->connection->exec("
                 UPDATE `users`
                 SET `username` = COALESCE(NULLIF(`username`, ''), NULLIF(`name`, ''), CONCAT('user_', `id`))
                 WHERE `username` = '' OR `username` IS NULL
             ");
-            return;
-        }
+      return;
+    }
 
-        $this->connection->exec("
+    $this->connection->exec("
             UPDATE `users`
             SET `username` = CONCAT('user_', `id`)
             WHERE `username` = '' OR `username` IS NULL
         ");
+  }
+
+  private function relaxLegacyNameColumn()
+  {
+    if ($this->columnExists('users', 'name')) {
+      $this->connection->exec("ALTER TABLE `users` MODIFY `name` varchar(100) DEFAULT NULL");
+    }
+  }
+
+  private function backfillServices()
+  {
+    if (!$this->tableExists('services') || !$this->columnExists('services', 'name')) {
+      return;
     }
 
-    private function relaxLegacyNameColumn()
-    {
-        if ($this->columnExists('users', 'name')) {
-            $this->connection->exec("ALTER TABLE `users` MODIFY `name` varchar(100) DEFAULT NULL");
-        }
-    }
+    $defaults = [
+      1 => ['Veterinary Clinic', 'Healthcare'],
+      2 => ['Pet Grooming', 'Grooming'],
+      3 => ['Dog Walking', 'Pet Care'],
+      4 => ['Pet Marketplace', 'Shopping'],
+      5 => ['Pet Training', 'Training']
+    ];
 
-    private function backfillServices()
-    {
-        if (!$this->tableExists('services') || !$this->columnExists('services', 'name')) {
-            return;
-        }
-
-        $defaults = [
-            1 => ['Veterinary Clinic', 'Healthcare'],
-            2 => ['Pet Grooming', 'Grooming'],
-            3 => ['Dog Walking', 'Pet Care'],
-            4 => ['Pet Marketplace', 'Shopping'],
-            5 => ['Pet Training', 'Training']
-        ];
-
-        foreach ($defaults as $id => [$name, $category]) {
-            $stmt = $this->connection->prepare("
+    foreach ($defaults as $id => [$name, $category]) {
+      $stmt = $this->connection->prepare("
                 INSERT INTO `services` (`id`, `name`, `category`)
                 VALUES (?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     `name` = IF(`name` = '' OR `name` IS NULL, VALUES(`name`), `name`),
                     `category` = IF(`category` IS NULL OR `category` = '', VALUES(`category`), `category`)
             ");
-            $stmt->execute([$id, $name, $category]);
-        }
+      $stmt->execute([$id, $name, $category]);
+    }
+  }
+
+  private function seedVetActionPermissions()
+  {
+    if (!$this->tableExists('veterinarians') || !$this->tableExists('vet_action_permissions')) {
+      return;
     }
 
-    private function seedVetActionPermissions()
-    {
-        if (!$this->tableExists('veterinarians') || !$this->tableExists('vet_action_permissions')) {
-            return;
+    $defaults = [
+      'lab_reports' => 'approve_user',
+      'referrals' => 'request_admin',
+      'surgery_booking' => 'request_admin',
+      'medical_records' => 'request_user'
+    ];
+
+    $vets = $this->connection->query("SELECT id FROM veterinarians")->fetchAll(PDO::FETCH_COLUMN);
+    $check = $this->connection->prepare("SELECT COUNT(*) FROM vet_action_permissions WHERE vet_id = ? AND action_key = ?");
+    $insert = $this->connection->prepare("INSERT INTO vet_action_permissions (vet_id, action_key, access_mode, is_active) VALUES (?, ?, ?, 1)");
+
+    foreach ($vets as $vetId) {
+      foreach ($defaults as $actionKey => $mode) {
+        $check->execute([$vetId, $actionKey]);
+        if ((int) $check->fetchColumn() === 0) {
+          $insert->execute([$vetId, $actionKey, $mode]);
         }
+      }
+    }
+  }
 
-        $defaults = [
-            'lab_reports' => 'approve_user',
-            'referrals' => 'request_admin',
-            'surgery_booking' => 'request_admin',
-            'medical_records' => 'request_user'
-        ];
-
-        $vets = $this->connection->query("SELECT id FROM veterinarians")->fetchAll(PDO::FETCH_COLUMN);
-        $check = $this->connection->prepare("SELECT COUNT(*) FROM vet_action_permissions WHERE vet_id = ? AND action_key = ?");
-        $insert = $this->connection->prepare("INSERT INTO vet_action_permissions (vet_id, action_key, access_mode, is_active) VALUES (?, ?, ?, 1)");
-
-        foreach ($vets as $vetId) {
-            foreach ($defaults as $actionKey => $mode) {
-                $check->execute([$vetId, $actionKey]);
-                if ((int) $check->fetchColumn() === 0) {
-                    $insert->execute([$vetId, $actionKey, $mode]);
-                }
-            }
-        }
+  private function seedMarketplaceItems()
+  {
+    if (!$this->tableExists('marketplace_items')) {
+      return;
     }
 
-    private function seedMarketplaceItems()
-    {
-        if (!$this->tableExists('marketplace_items')) {
-            return;
-        }
+    $items = [
+      [
+        'name' => 'Premium Dog Food',
+        'short_description' => 'High-protein blend for active dogs',
+        'price' => 520.00,
+        'category' => 'Food',
+        'image' => 'premium-dog-food.png',
+        'rating' => 4.8,
+        'stock' => 20,
+        'is_recommended' => 1,
+      ],
+      [
+        'name' => 'Squeaky Plush Toy',
+        'short_description' => 'Soft chew-friendly playtime favorite',
+        'price' => 120.00,
+        'category' => 'Toys',
+        'image' => 'squeaky-plush-toy.png',
+        'rating' => 4.6,
+        'stock' => 30,
+        'is_recommended' => 1,
+      ],
+      [
+        'name' => 'Adjustable Pet Collar',
+        'short_description' => 'Comfort fit with premium buckle',
+        'price' => 95.00,
+        'category' => 'Accessories',
+        'image' => 'adjustable-pet-collar.png',
+        'rating' => 4.7,
+        'stock' => 25,
+        'is_recommended' => 1,
+      ],
+      [
+        'name' => 'Soft Cozy Pet Bed',
+        'short_description' => 'Cloud-soft rest spot for naps',
+        'price' => 450.00,
+        'category' => 'Beds',
+        'image' => 'soft-cozy-pet-bed.png',
+        'rating' => 4.9,
+        'stock' => 12,
+        'is_recommended' => 1,
+      ],
+      [
+        'name' => 'Durable Rope Toy',
+        'short_description' => 'Strong braided rope for tug play',
+        'price' => 110.00,
+        'category' => 'Toys',
+        'image' => 'durable-rope-toy.png',
+        'rating' => 4.5,
+        'stock' => 18,
+        'is_recommended' => 1,
+      ],
+    ];
 
-        $items = [
-            [
-                'name' => 'Premium Dog Food',
-                'short_description' => 'High-protein blend for active dogs',
-                'price' => 520.00,
-                'category' => 'Food',
-                'image' => 'premium-dog-food.png',
-                'rating' => 4.8,
-                'stock' => 20,
-                'is_recommended' => 1,
-            ],
-            [
-                'name' => 'Squeaky Plush Toy',
-                'short_description' => 'Soft chew-friendly playtime favorite',
-                'price' => 120.00,
-                'category' => 'Toys',
-                'image' => 'squeaky-plush-toy.png',
-                'rating' => 4.6,
-                'stock' => 30,
-                'is_recommended' => 1,
-            ],
-            [
-                'name' => 'Adjustable Pet Collar',
-                'short_description' => 'Comfort fit with premium buckle',
-                'price' => 95.00,
-                'category' => 'Accessories',
-                'image' => 'adjustable-pet-collar.png',
-                'rating' => 4.7,
-                'stock' => 25,
-                'is_recommended' => 1,
-            ],
-            [
-                'name' => 'Soft Cozy Pet Bed',
-                'short_description' => 'Cloud-soft rest spot for naps',
-                'price' => 450.00,
-                'category' => 'Beds',
-                'image' => 'soft-cozy-pet-bed.png',
-                'rating' => 4.9,
-                'stock' => 12,
-                'is_recommended' => 1,
-            ],
-            [
-                'name' => 'Durable Rope Toy',
-                'short_description' => 'Strong braided rope for tug play',
-                'price' => 110.00,
-                'category' => 'Toys',
-                'image' => 'durable-rope-toy.png',
-                'rating' => 4.5,
-                'stock' => 18,
-                'is_recommended' => 1,
-            ],
-        ];
-
-        $insert = $this->connection->prepare("
+    $insert = $this->connection->prepare("
             INSERT INTO `marketplace_items`
                 (`name`, `short_description`, `price`, `category`, `image`, `rating`, `stock`, `is_recommended`)
             VALUES
                 (:name, :short_description, :price, :category, :image, :rating, :stock, :is_recommended)
         ");
-        $update = $this->connection->prepare("
+    $update = $this->connection->prepare("
             UPDATE `marketplace_items`
             SET `short_description` = :short_description,
                 `price` = :price,
@@ -821,36 +1112,36 @@ class Database
                 `is_recommended` = :is_recommended
             WHERE `id` = :id
         ");
-        $check = $this->connection->prepare("SELECT id FROM `marketplace_items` WHERE `name` = ? LIMIT 1");
+    $check = $this->connection->prepare("SELECT id FROM `marketplace_items` WHERE `name` = ? LIMIT 1");
 
-        foreach ($items as $item) {
-            $check->execute([$item['name']]);
-            $existingId = $check->fetchColumn();
+    foreach ($items as $item) {
+      $check->execute([$item['name']]);
+      $existingId = $check->fetchColumn();
 
-            if ($existingId) {
-                $update->execute([
-                    'short_description' => $item['short_description'],
-                    'price' => $item['price'],
-                    'category' => $item['category'],
-                    'image' => $item['image'],
-                    'rating' => $item['rating'],
-                    'stock' => $item['stock'],
-                    'is_recommended' => $item['is_recommended'],
-                    'id' => $existingId,
-                ]);
-                continue;
-            }
+      if ($existingId) {
+        $update->execute([
+          'short_description' => $item['short_description'],
+          'price' => $item['price'],
+          'category' => $item['category'],
+          'image' => $item['image'],
+          'rating' => $item['rating'],
+          'stock' => $item['stock'],
+          'is_recommended' => $item['is_recommended'],
+          'id' => $existingId,
+        ]);
+        continue;
+      }
 
-            $insert->execute([
-                'name' => $item['name'],
-                'short_description' => $item['short_description'],
-                'price' => $item['price'],
-                'category' => $item['category'],
-                'image' => $item['image'],
-                'rating' => $item['rating'],
-                'stock' => $item['stock'],
-                'is_recommended' => $item['is_recommended'],
-            ]);
-        }
+      $insert->execute([
+        'name' => $item['name'],
+        'short_description' => $item['short_description'],
+        'price' => $item['price'],
+        'category' => $item['category'],
+        'image' => $item['image'],
+        'rating' => $item['rating'],
+        'stock' => $item['stock'],
+        'is_recommended' => $item['is_recommended'],
+      ]);
     }
+  }
 }
