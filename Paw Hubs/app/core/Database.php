@@ -57,7 +57,7 @@ class Database
           `phone` varchar(20) DEFAULT NULL,
           `password` varchar(255) NOT NULL,
           `image` varchar(255) DEFAULT 'default.png',
-          `role` enum('pet_owner','admin','service_provider','vet') DEFAULT 'pet_owner',
+          `role` enum('pet_owner','admin','service_provider','vet','vendor') DEFAULT 'pet_owner',
           `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
           PRIMARY KEY (`id`),
           UNIQUE KEY `email` (`email`)
@@ -278,12 +278,14 @@ class Database
 
         CREATE TABLE IF NOT EXISTS `vendors` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
+          `user_id` int(11) DEFAULT NULL,
           `name` varchar(50) NOT NULL,
           `balance` double NOT NULL DEFAULT 0,
           `commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000,
           `tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400,
           `is_active` tinyint(1) NOT NULL DEFAULT 1,
-          PRIMARY KEY (`id`)
+          PRIMARY KEY (`id`),
+          KEY `user_id` (`user_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
         CREATE TABLE IF NOT EXISTS orders (
@@ -560,18 +562,20 @@ class Database
 
   private function migrateTables()
   {
-    
+
     $this->addColumnIfMissing('users', 'username', "`username` varchar(100) NOT NULL DEFAULT '' AFTER `id`");
     $this->addColumnIfMissing('users', 'phone', "`phone` varchar(20) DEFAULT NULL AFTER `email`");
     $this->addColumnIfMissing('users', 'password', "`password` varchar(255) NOT NULL DEFAULT '' AFTER `phone`");
     $this->addColumnIfMissing('users', 'image', "`image` varchar(255) DEFAULT 'default.png' AFTER `password`");
-    $this->addColumnIfMissing('users', 'role', "`role` enum('pet_owner','admin','service_provider','vet') DEFAULT 'pet_owner' AFTER `image`");
+    $this->addColumnIfMissing('users', 'role', "`role` enum('pet_owner','admin','service_provider','vet','vendor') DEFAULT 'pet_owner' AFTER `image`");
     $this->addColumnIfMissing('users', 'status', "`status` varchar(20) NOT NULL DEFAULT 'active' AFTER `role`");
     $this->addColumnIfMissing('users', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `role`");
     $this->backfillUsernames();
     $this->connection->exec("ALTER TABLE `users` MODIFY `password` varchar(255) NOT NULL");
     $this->connection->exec("ALTER TABLE `users` MODIFY `username` varchar(100) NOT NULL");
     $this->connection->exec("ALTER TABLE `users` MODIFY `status` varchar(20) NOT NULL DEFAULT 'active'");
+    $this->connection->exec("UPDATE `users` SET `role` = 'service_provider' WHERE `role` = 'provider'");
+    $this->connection->exec("ALTER TABLE `users` MODIFY `role` enum('pet_owner','admin','service_provider','vet','vendor') DEFAULT 'pet_owner'");
     $this->relaxLegacyNameColumn();
 
     $this->addColumnIfMissing('pet_owners', 'user_id', "`user_id` int(11) NOT NULL AFTER `id`");
@@ -694,28 +698,30 @@ class Database
               PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
-    foreach ([
-      'booking_id' => "`booking_id` int(11) NOT NULL AFTER `id`",
-      'report_id' => "`report_id` int(11) DEFAULT NULL AFTER `booking_id`",
-      'provider_id' => "`provider_id` int(11) NOT NULL AFTER `report_id`",
-      'owner_id' => "`owner_id` int(11) NOT NULL AFTER `provider_id`",
-      'service_id' => "`service_id` int(11) NOT NULL AFTER `owner_id`",
-      'base_price' => "`base_price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `service_id`",
-      'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500 AFTER `base_price`",
-      'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
-      'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
-      'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
-      'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
-      'provider_earning' => "`provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `gross_amount`",
-      'platform_total_due' => "`platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `provider_earning`",
-      'cash_received_amount' => "`cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `platform_total_due`",
-      'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'cash' AFTER `cash_received_amount`",
-      'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash' AFTER `payment_method`",
-      'transfer_status' => "`transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred' AFTER `payment_status`",
-      'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `transfer_status`",
-      'transferred_at' => "`transferred_at` datetime DEFAULT NULL AFTER `paid_at`",
-      'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `transferred_at`"
-    ] as $column => $definition) {
+    foreach (
+      [
+        'booking_id' => "`booking_id` int(11) NOT NULL AFTER `id`",
+        'report_id' => "`report_id` int(11) DEFAULT NULL AFTER `booking_id`",
+        'provider_id' => "`provider_id` int(11) NOT NULL AFTER `report_id`",
+        'owner_id' => "`owner_id` int(11) NOT NULL AFTER `provider_id`",
+        'service_id' => "`service_id` int(11) NOT NULL AFTER `owner_id`",
+        'base_price' => "`base_price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `service_id`",
+        'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1500 AFTER `base_price`",
+        'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
+        'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
+        'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
+        'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
+        'provider_earning' => "`provider_earning` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `gross_amount`",
+        'platform_total_due' => "`platform_total_due` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `provider_earning`",
+        'cash_received_amount' => "`cash_received_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `platform_total_due`",
+        'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'cash' AFTER `cash_received_amount`",
+        'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'pending_owner_cash' AFTER `payment_method`",
+        'transfer_status' => "`transfer_status` varchar(30) NOT NULL DEFAULT 'not_transferred' AFTER `payment_status`",
+        'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `transfer_status`",
+        'transferred_at' => "`transferred_at` datetime DEFAULT NULL AFTER `paid_at`",
+        'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `transferred_at`"
+      ] as $column => $definition
+    ) {
       $this->addColumnIfMissing('provider_payments', $column, $definition);
     }
 
@@ -725,7 +731,8 @@ class Database
     $this->addColumnIfMissing('reviews', 'comment', "`comment` text DEFAULT NULL AFTER `rating`");
     $this->addColumnIfMissing('reviews', 'created_at', "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `comment`");
 
-    $this->addColumnIfMissing('vendors', 'name', "name varchar(50) NOT NULL DEFAULT '' AFTER id");
+    $this->addColumnIfMissing('vendors', 'user_id', "user_id int(11) DEFAULT NULL AFTER id");
+    $this->addColumnIfMissing('vendors', 'name', "name varchar(50) NOT NULL DEFAULT '' AFTER user_id");
     $this->addColumnIfMissing('vendors', 'balance', "balance double NOT NULL DEFAULT 0 AFTER name");
     $this->addColumnIfMissing('vendors', 'commission_rate', "commission_rate decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER balance");
     $this->addColumnIfMissing('vendors', 'tax_rate', "tax_rate decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER commission_rate");
@@ -767,25 +774,27 @@ class Database
               PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
-    foreach ([
-      'order_id' => "`order_id` int(11) NOT NULL AFTER `id`",
-      'vendor_id' => "`vendor_id` int(11) NOT NULL AFTER `order_id`",
-      'subtotal_amount' => "`subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_id`",
-      'discount_amount' => "`discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `subtotal_amount`",
-      'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `discount_amount`",
-      'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER `gross_amount`",
-      'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
-      'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
-      'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
-      'vendor_payout' => "`vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
-      'platform_total' => "`platform_total` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_payout`",
-      'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'online' AFTER `platform_total`",
-      'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'paid' AFTER `payment_method`",
-      'payout_status' => "`payout_status` varchar(30) NOT NULL DEFAULT 'pending' AFTER `payment_status`",
-      'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `payout_status`",
-      'payout_released_at' => "`payout_released_at` datetime DEFAULT NULL AFTER `paid_at`",
-      'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `payout_released_at`"
-    ] as $column => $definition) {
+    foreach (
+      [
+        'order_id' => "`order_id` int(11) NOT NULL AFTER `id`",
+        'vendor_id' => "`vendor_id` int(11) NOT NULL AFTER `order_id`",
+        'subtotal_amount' => "`subtotal_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_id`",
+        'discount_amount' => "`discount_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `subtotal_amount`",
+        'gross_amount' => "`gross_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `discount_amount`",
+        'commission_rate' => "`commission_rate` decimal(5,4) NOT NULL DEFAULT 0.1000 AFTER `gross_amount`",
+        'commission_amount' => "`commission_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `commission_rate`",
+        'tax_rate' => "`tax_rate` decimal(5,4) NOT NULL DEFAULT 0.1400 AFTER `commission_amount`",
+        'tax_amount' => "`tax_amount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_rate`",
+        'vendor_payout' => "`vendor_payout` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `tax_amount`",
+        'platform_total' => "`platform_total` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `vendor_payout`",
+        'payment_method' => "`payment_method` varchar(30) NOT NULL DEFAULT 'online' AFTER `platform_total`",
+        'payment_status' => "`payment_status` varchar(30) NOT NULL DEFAULT 'paid' AFTER `payment_method`",
+        'payout_status' => "`payout_status` varchar(30) NOT NULL DEFAULT 'pending' AFTER `payment_status`",
+        'paid_at' => "`paid_at` datetime DEFAULT NULL AFTER `payout_status`",
+        'payout_released_at' => "`payout_released_at` datetime DEFAULT NULL AFTER `paid_at`",
+        'created_at' => "`created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `payout_released_at`"
+      ] as $column => $definition
+    ) {
       $this->addColumnIfMissing('vendor_payments', $column, $definition);
     }
 
