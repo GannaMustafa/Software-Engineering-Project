@@ -1475,7 +1475,7 @@ $defaultPetImage = asset('images/guest.png');
                 <h1>Your pet's health, care, and community—together.</h1>
                 <p>Track appointments, manage wellness, and discover the best pet products in one premium hub.</p>
                 <div class="hero-actions">
-                    <a href="index.php?url=appointments/index" class="btn primary"><i class="far fa-calendar-plus"></i> Book Appointment</a>
+                    <a href="<?= htmlspecialchars(app_url('home/index', 'services-showcase-title')) ?>" class="btn primary"><i class="far fa-calendar-plus"></i> Book Services</a>
                     <a href="#my-pets" class="btn"><i class="fas fa-paw"></i> View My Pets</a>
                 </div>
             </div>
@@ -1947,7 +1947,7 @@ $defaultPetImage = asset('images/guest.png');
                                 <li><i class="far fa-circle-check"></i> Play &amp; Companionship</li>
                                 <li><i class="far fa-circle-check"></i> Flexible Scheduling</li>
                             </ul>
-                            <a href="index.php?url=appointments/index" class="service-cta">Find a Service Provider <i class="fas fa-angle-right"></i></a>
+                            <a href="<?= htmlspecialchars(app_url('service/index')) ?>" class="service-cta">Find a Service Provider <i class="fas fa-angle-right"></i></a>
                         </div>
 
                         <div class="service-media">

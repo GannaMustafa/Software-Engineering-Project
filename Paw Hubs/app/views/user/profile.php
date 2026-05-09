@@ -394,13 +394,13 @@ $serviceCount = count($history['services']);
     <div class="profile-layout">
         <aside class="panel identity-panel">
             <img src="<?= htmlspecialchars($profileSrc) ?>" class="profile-img" alt="Profile picture">
-            <h1><?= htmlspecialchars($user['username']) ?></h1>
+            <h1><?= htmlspecialchars($user['username'] ?? 'User') ?></h1>
             <p><?= htmlspecialchars(ucfirst($user['role'] ?? 'pet_owner')) ?></p>
 
             <div class="mini-info">
                 <div>
                     <span>Email</span>
-                    <strong><?= htmlspecialchars($user['email']) ?></strong>
+                    <strong><?= htmlspecialchars($user['email'] ?? 'Not set') ?></strong>
                 </div>
                 <div>
                     <span>Phone</span>
@@ -435,11 +435,11 @@ $serviceCount = count($history['services']);
                     <div class="form-grid">
                         <div class="field">
                             <label for="username">Username</label>
-                            <input id="username" type="text" name="username" value="<?= htmlspecialchars($user['username']) ?>" required>
+                            <input id="username" type="text" name="username" value="<?= htmlspecialchars($user['username'] ?? '') ?>" required>
                         </div>
                         <div class="field">
                             <label for="email">Email</label>
-                            <input id="email" type="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" required>
+                            <input id="email" type="email" name="email" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
                         </div>
                         <div class="field">
                             <label for="phone">Phone</label>
