@@ -89,15 +89,5 @@ class ReferralController extends Controller {
         $stmt->execute([$_SESSION['user_id'] ?? null, $entityType, $entityId, $action, $details, $_SERVER['REMOTE_ADDR'] ?? null]);
     }
 
-    private function fetchOne($db, $sql, $params = []) {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-
-    private function fetchAll($db, $sql, $params = []) {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+   
 }

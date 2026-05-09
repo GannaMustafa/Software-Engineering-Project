@@ -133,6 +133,5 @@
             this.classList.toggle('fa-eye-slash');
         });
     </script>
-    <?php require_once '../app/views/partials/theme_toggle.php'; ?>
 </body>
 </html>

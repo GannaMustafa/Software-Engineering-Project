@@ -384,6 +384,5 @@ $activeUsers = $stats['active_users'] ?? 0;
 </main>
 
 <?php require_once '../app/views/partials/footer.php'; ?>
-<?php require_once '../app/views/partials/theme_toggle.php'; ?>
 </body>
 </html>

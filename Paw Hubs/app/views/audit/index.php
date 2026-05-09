@@ -524,6 +524,5 @@ $stats = isset($stats) && is_array($stats) ? $stats : ['total' => 0, 'today' => 
     });
 })();
 </script>
-<?php require_once '../app/views/partials/theme_toggle.php'; ?>
 </body>
 </html>

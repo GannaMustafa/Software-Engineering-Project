@@ -1009,13 +1009,44 @@ CREATE TABLE IF NOT EXISTS `medical_procedures` (
   KEY `vet_id` (`vet_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE IF NOT EXISTS `surgery_requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `owner_id` int(11) NOT NULL,
+  `pet_id` int(11) NOT NULL,
+  `medical_procedure_id` int(11) DEFAULT NULL,
+  `procedure_type` varchar(120) NOT NULL,
+  `reason` text NOT NULL,
+  `urgency` varchar(30) NOT NULL DEFAULT 'normal',
+  `status` varchar(40) NOT NULL DEFAULT 'pending',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `owner_id` (`owner_id`),
+  KEY `pet_id` (`pet_id`),
+  KEY `medical_procedure_id` (`medical_procedure_id`),
+  KEY `status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+ALTER TABLE `surgery_requests`
+  ADD COLUMN IF NOT EXISTS `medical_procedure_id` int(11) DEFAULT NULL AFTER `pet_id`,
+  ADD COLUMN IF NOT EXISTS `created_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`,
+  ADD COLUMN IF NOT EXISTS `updated_at` timestamp NULL DEFAULT NULL AFTER `created_at`;
+
 CREATE TABLE IF NOT EXISTS `lab_reports` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `pet_id` int(11) NOT NULL,
   `vet_id` int(11) DEFAULT NULL,
   `test_name` varchar(120) NOT NULL,
+  `test_type` varchar(120) DEFAULT NULL,
   `result_summary` varchar(255) DEFAULT NULL,
+  `raw_values` text DEFAULT NULL,
+  `reference_ranges` text DEFAULT NULL,
   `interpretation` text DEFAULT NULL,
+  `technical_data` longtext DEFAULT NULL,
+  `abnormal_flags` text DEFAULT NULL,
+  `follow_up_actions` text DEFAULT NULL,
+  `vet_notes` text DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
   `status` varchar(40) DEFAULT 'pending',
   `report_date` date DEFAULT NULL,
   `file_path` varchar(255) DEFAULT NULL,
@@ -1024,6 +1055,16 @@ CREATE TABLE IF NOT EXISTS `lab_reports` (
   KEY `pet_id` (`pet_id`),
   KEY `vet_id` (`vet_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+ALTER TABLE `lab_reports`
+  ADD COLUMN IF NOT EXISTS `test_type` varchar(120) DEFAULT NULL AFTER `test_name`,
+  ADD COLUMN IF NOT EXISTS `raw_values` text DEFAULT NULL AFTER `result_summary`,
+  ADD COLUMN IF NOT EXISTS `reference_ranges` text DEFAULT NULL AFTER `raw_values`,
+  ADD COLUMN IF NOT EXISTS `technical_data` longtext DEFAULT NULL AFTER `interpretation`,
+  ADD COLUMN IF NOT EXISTS `abnormal_flags` text DEFAULT NULL AFTER `technical_data`,
+  ADD COLUMN IF NOT EXISTS `follow_up_actions` text DEFAULT NULL AFTER `abnormal_flags`,
+  ADD COLUMN IF NOT EXISTS `vet_notes` text DEFAULT NULL AFTER `follow_up_actions`,
+  ADD COLUMN IF NOT EXISTS `reviewed_at` datetime DEFAULT NULL AFTER `vet_notes`;
 
 CREATE TABLE IF NOT EXISTS `referrals` (
   `id` int(11) NOT NULL AUTO_INCREMENT,

@@ -432,11 +432,7 @@ class HomeController extends Controller {
         exit;
     }
 
-    private function fetchOne($db, $sql, $params = []) {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
+
 
     private function createUserNotification($db, $userId, $title, $message, $type) {
         if (!$userId) {
@@ -507,11 +503,7 @@ class HomeController extends Controller {
         }
     }
 
-    private function fetchAll($db, $sql, $params = []) {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+
 
     private function recommendedMarketplaceItems($db, $limit = 5) {
         if (!$this->tableExists($db, 'marketplace_items')) {
