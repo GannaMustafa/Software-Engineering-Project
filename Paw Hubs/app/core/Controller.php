@@ -14,4 +14,16 @@ class Controller {
         require_once '../app/models/' . $model . '.php';
         return new $model();
     }
+
+    protected function fetchOne($db, $query, $params = []) {
+        $stmt = $db->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    protected function fetchAll($db, $query, $params = []) {
+        $stmt = $db->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

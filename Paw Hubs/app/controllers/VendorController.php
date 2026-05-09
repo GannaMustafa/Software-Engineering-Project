@@ -136,17 +136,5 @@ class VendorController extends Controller
         return [null, ['Invalid action.']];
     }
 
-    private function fetchOne($db, $sql, $params = [])
-    {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-
-    private function fetchAll($db, $sql, $params = [])
-    {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+ 
 }

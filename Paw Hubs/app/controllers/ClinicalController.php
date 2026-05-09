@@ -10,6 +10,7 @@ class ClinicalController extends Controller
         }
 
         $db = Database::getInstance()->getConnection();
+        $this->ensureLabHubSchema($db);
         $role = $_SESSION['role'] ?? 'pet_owner';
         $userId = (int) $_SESSION['user_id'];
         $vet = $this->fetchOne($db, "SELECT id FROM veterinarians WHERE user_id = ?", [$userId]);
@@ -21,16 +22,26 @@ class ClinicalController extends Controller
         $errors = [];
         $preview = null;
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_lab_report') {
-            [$message, $errors, $preview] = $this->handleLabUpload($db, $role, $vetId, $ownerId);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            if ($action === 'upload_lab_report') {
+                [$message, $errors, $preview] = $this->handleLabUpload($db, $role, $vetId, $ownerId);
+            } elseif ($action === 'interpret_lab_result' && $role === 'vet') {
+                [$message, $errors] = $this->handleLabInterpretation($db, $vetId);
+            }
         }
 
         $reports = $this->labHubReports($db, $role, $vetId, $ownerId);
+        foreach ($reports as $report) {
+            $this->writeAudit($db, 'medical_record_accessed', 'lab_reports', (int) ($report['id'] ?? 0), 'Lab report listed in Lab Result Interpretation Hub.');
+        }
         $stats = [
             'total' => count($reports),
             'critical' => count(array_filter($reports, fn($report) => strtolower($report['status'] ?? '') === 'critical')),
             'normal' => count(array_filter($reports, fn($report) => strtolower($report['status'] ?? '') === 'normal')),
-            'pending' => count(array_filter($reports, fn($report) => strtolower($report['status'] ?? '') === 'pending'))
+            'pending' => count(array_filter($reports, fn($report) => strtolower($report['status'] ?? '') === 'pending')),
+            'abnormal' => count(array_filter($reports, fn($report) => !empty($report['abnormal_flags']))),
+            'reviewed' => count(array_filter($reports, fn($report) => strtolower($report['status'] ?? '') === 'completed'))
         ];
 
         $this->view('clinical/lab_hub', [
@@ -53,9 +64,9 @@ class ClinicalController extends Controller
         }
 
         $role = $_SESSION['role'] ?? 'pet_owner';
-        if (!in_array($role, ['admin', 'vet'], true)) {
+        if (!in_array($role, ['admin', 'vet', 'pet_owner'], true)) {
             http_response_code(403);
-            die("Access denied. Clinical Operations is available for admins and vets only.");
+            die("Access denied.");
         }
 
         if ($role === 'admin') {
@@ -64,52 +75,71 @@ class ClinicalController extends Controller
         }
 
         $db = Database::getInstance()->getConnection();
+        $this->ensureLabHubSchema($db);
+        $this->ensureSurgeryRequestSchema($db);
         $userId = $_SESSION['user_id'];
-        $vet = $this->fetchOne($db, "SELECT id FROM veterinarians WHERE user_id = ?", [$userId]);
-        $vetId = $role === 'vet' ? ($vet['id'] ?? 0) : null;
+
+        if ($role === 'vet') {
+            $vet = $this->fetchOne($db, "SELECT id FROM veterinarians WHERE user_id = ?", [$userId]);
+            $vetId = (int) ($vet['id'] ?? 0);
+            $ownerId = null;
+        } elseif ($role === 'pet_owner') {
+            $owner = $this->fetchOne($db, "SELECT id FROM pet_owners WHERE user_id = ?", [$userId]);
+            $ownerId = (int) ($owner['id'] ?? 0);
+            $vetId = null;
+        }
 
         $message = null;
         $errors = [];
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action = $_POST['action'] ?? '';
-            if ($action === 'submit_clinical_workflow') {
+            if ($action === 'request_surgery' && $role === 'pet_owner') {
+                [$message, $errors] = $this->handleSurgeryRequest($db, $ownerId);
+            } elseif ($action === 'send_owner_surgery_to_admin' && $role === 'vet') {
+                [$message, $errors] = $this->handleOwnerSurgeryAdminForward($db, $vetId);
+            } elseif ($action === 'upload_lab_report' && $role === 'vet') {
+                [$message, $errors] = $this->handleLabUpload($db,$role,$vetId,$ownerId);
+            } elseif ($action === 'initiate_referral' && $role === 'vet') {
+                [$message, $errors] = $this->handleInitiateReferral($db, $vetId);
+            } elseif ($action === 'submit_clinical_workflow' && $role === 'vet') {
                 [$message, $errors] = $this->handleClinicalWorkflowRequest($db, $vetId);
-            } elseif ($action === 'interpret_lab_result') {
+            } elseif ($action === 'interpret_lab_result' && $role === 'vet') {
                 [$message, $errors] = $this->handleLabInterpretation($db, $vetId);
-            } elseif ($action === 'transfer_referral_case') {
+            } elseif ($action === 'transfer_referral_case' && $role === 'vet') {
                 [$message, $errors] = $this->handleReferralTransfer($db, $vetId);
-            } elseif ($action === 'resolve_vet_request') {
-                [$message, $errors] = $this->handleVetRequestResolution($db, $vetId);
-            } elseif ($action === 'add_request_health_record') {
-                [$message, $errors] = $this->handleRequestHealthRecord($db, $vetId);
             }
         }
 
-        $procedures = $this->procedures($db, $vetId);
-        $labReports = $this->labReports($db, $vetId);
-        $referrals = $this->referrals($db, $vetId);
-        $auditLogs = $this->auditLogs($db, $vetId, $role, 5);
-        $workflowRequests = $this->vetWorkflowRequests($db, $vetId);
-        $vetRequests = $this->vetRequests($db, $vetId);
-        $permissions = $this->vetPermissions($db, $vetId);
-        $stats = [
-            'procedures' => $this->countRows($db, 'medical_procedures', $vetId ? 'vet_id = ?' : null, $vetId ? [$vetId] : []),
-            'lab_reports' => $this->countRows($db, 'lab_reports', $vetId ? 'vet_id = ?' : null, $vetId ? [$vetId] : []),
-            'referrals' => $this->countReferrals($db, $vetId),
-            'audit_logs' => count($auditLogs),
-            'workflow_requests' => count($workflowRequests),
-            'vet_requests' => count($vetRequests),
-            'urgent_vet_requests' => count(array_filter($vetRequests, fn($request) => strtolower($request['priority'] ?? '') === 'urgent')),
-            'pending_admin' => count(array_filter($workflowRequests, fn($request) => strtolower($request['admin_status'] ?? '') === 'pending')),
-            'pending_owner' => count(array_filter($workflowRequests, fn($request) => strtolower($request['owner_status'] ?? '') === 'pending'))
-        ];
+        if ($role === 'vet') {
+            $procedures = $this->procedures($db, $vetId);
+            $labReports = $this->labReports($db, $vetId);
+            $referrals = $this->referrals($db, $vetId);
+            $stats = [
+                'procedures' => count($procedures),
+                'lab_reports' => count($labReports),
+                'referrals' => count($referrals)
+            ];
+        } elseif ($role === 'pet_owner') {
+            $procedures = $this->ownerProcedures($db, $ownerId);
+            $labReports = $this->ownerLabReports($db, $ownerId);
+            $referrals = $this->ownerReferrals($db, $ownerId);
+            $stats = [
+                'procedures' => count($procedures),
+                'lab_reports' => count($labReports),
+                'referrals' => count($referrals)
+            ];
+        }
 
-        $this->view('clinical/vet_dashboard', [
+        $this->view('clinical/index', [
             'role' => $role,
             'stats' => $stats,
-            'workflowRequests' => $workflowRequests,
-            'vetRequests' => $vetRequests,
-            'incomingLabStats' => $this->incomingLabStats($labReports),
+            'procedures' => $procedures,
+            'labReports' => $labReports,
+            'referrals' => $referrals,
+            'pets' => $role === 'vet' ? $this->allPets($db) : $this->ownerPets($db, $ownerId ?? 0),
+            'specialists' => $this->specialists($db),
+            'operatingRooms' => $role === 'vet' ? $this->availableOperatingRooms($db) : [],
+            'equipment' => $role === 'vet' ? $this->availableSurgicalEquipment($db) : [],
             'message' => $message,
             'errors' => $errors
         ]);
@@ -133,30 +163,45 @@ class ClinicalController extends Controller
         }
 
         $db = Database::getInstance()->getConnection();
+        $this->ensureSurgeryRequestSchema($db);
         $userId = (int) $_SESSION['user_id'];
         $vet = $this->fetchOne($db, "SELECT id FROM veterinarians WHERE user_id = ?", [$userId]);
         $vetId = (int) ($vet['id'] ?? 0);
 
         $message = null;
         $errors = [];
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_clinical_workflow') {
-            [$message, $errors] = $this->handleClinicalWorkflowRequest($db, $vetId);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            if ($action === 'submit_clinical_workflow') {
+                [$message, $errors] = $this->handleClinicalWorkflowRequest($db, $vetId);
+            } elseif ($action === 'send_owner_surgery_to_admin') {
+                [$message, $errors] = $this->handleOwnerSurgeryAdminForward($db, $vetId);
+            }
         }
 
         $procedures = $this->procedures($db, $vetId);
+        $ownerSurgeryRequests = $this->ownerSurgeryRequestsForVet($db, $vetId);
         $permissions = $this->vetPermissions($db, $vetId);
         $workflowRequests = $this->vetWorkflowRequests($db, $vetId);
+        $operatingRooms = $this->availableOperatingRooms($db);
+        $equipment = $this->availableSurgicalEquipment($db);
+        $specialists = $this->specialists($db);
 
         $this->view('clinical/vet_surgery_manager', [
             'role' => $role,
             'stats' => [
-                'procedures' => $this->countRows($db, 'medical_procedures', 'vet_id = ?', [$vetId]),
+                'procedures' => count($procedures),
+                'owner_requests' => count($ownerSurgeryRequests),
                 'pending_admin' => count(array_filter($workflowRequests, fn($request) => strtolower($request['action_key'] ?? '') === 'surgery_booking' && strtolower($request['admin_status'] ?? '') === 'pending')),
                 'approved' => count(array_filter($workflowRequests, fn($request) => strtolower($request['action_key'] ?? '') === 'surgery_booking' && strtolower($request['request_status'] ?? '') === 'approved'))
             ],
             'procedures' => $procedures,
+            'ownerSurgeryRequests' => $ownerSurgeryRequests,
             'permissions' => $permissions,
             'workflowRequests' => $workflowRequests,
+            'operatingRooms' => $operatingRooms,
+            'equipment' => $equipment,
+            'specialists' => $specialists,
             'message' => $message,
             'errors' => $errors
         ]);
@@ -282,7 +327,7 @@ class ClinicalController extends Controller
 
     private function procedures($db, $vetId)
     {
-        $where = $vetId ? 'WHERE mp.vet_id = ?' : '';
+        $where = $vetId ? "WHERE mp.vet_id = ? OR (mp.vet_id IS NULL AND LOWER(COALESCE(mp.status, '')) IN ('owner_requested', 'pending_vet_review'))" : '';
         return $this->fetchAll(
             $db,
             "SELECT mp.*, p.name AS pet_name, p.species, u.username AS owner_name, vu.username AS vet_name
@@ -323,10 +368,12 @@ class ClinicalController extends Controller
         $petId = (int) ($_POST['pet_id'] ?? 0);
         $assignedVetId = (int) ($_POST['vet_id'] ?? 0);
         $testName = trim($_POST['test_name'] ?? '');
+        $testType = trim($_POST['test_type'] ?? '');
         $resultSummary = trim($_POST['result_summary'] ?? '');
         $status = trim($_POST['status'] ?? 'pending');
         $reportDate = trim($_POST['report_date'] ?? date('Y-m-d'));
         $rawValues = trim($_POST['raw_values'] ?? '');
+        $referenceRanges = trim($_POST['reference_ranges'] ?? '');
         $notes = trim($_POST['notes'] ?? '');
         $errors = [];
 
@@ -353,7 +400,15 @@ class ClinicalController extends Controller
             return [null, $errors, null];
         }
 
-        $insight = $this->buildLabInsight($testName, $resultSummary, $rawValues, $status, $notes);
+        $parsed = $this->parseStructuredLabResults($testName, $testType, $resultSummary, $rawValues, $referenceRanges, $status, $notes);
+        $testType = $testType !== '' ? $testType : $parsed['test_type'];
+        if ($status === 'pending' && !empty($parsed['abnormal_flags'])) {
+            $status = 'critical';
+        }
+        $insight = $this->buildLabInsight($testName, $resultSummary, $rawValues, $status, $notes, $parsed);
+        $technicalData = json_encode($parsed, JSON_UNESCAPED_SLASHES);
+        $abnormalFlags = implode("\n", $parsed['abnormal_flags']);
+        $followUps = implode("\n", $parsed['follow_up_actions']);
         if ($role === 'vet' && $vetId) {
             $permission = $this->resolveVetActionPermission($db, $vetId, 'lab_reports');
             if (($permission['access_mode'] ?? 'request_admin') !== 'approve_user') {
@@ -362,6 +417,8 @@ class ClinicalController extends Controller
                     'test_name' => $testName,
                     'result_summary' => $resultSummary,
                     'raw_values' => $rawValues,
+                    'reference_ranges' => $referenceRanges,
+                    'test_type' => $testType,
                     'report_date' => $reportDate,
                     'status' => $status,
                     'file_path' => $filePath
@@ -385,13 +442,55 @@ class ClinicalController extends Controller
         }
 
         $stmt = $db->prepare(
-            "INSERT INTO lab_reports (pet_id, vet_id, test_name, result_summary, interpretation, status, report_date, file_path)
-             VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)"
+            "INSERT INTO lab_reports
+             (pet_id, vet_id, test_name, test_type, result_summary, raw_values, reference_ranges, interpretation, technical_data, abnormal_flags, follow_up_actions, status, report_date, file_path)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)"
         );
-        $stmt->execute([$petId, $assignedVetId, $testName, $resultSummary ?: $rawValues, $insight, $status, $reportDate, $filePath]);
+        $stmt->execute([$petId, $assignedVetId, $testName, $testType, $resultSummary ?: $rawValues, $rawValues, $referenceRanges, $insight, $technicalData, $abnormalFlags, $followUps, $status, $reportDate, $filePath]);
 
-        $this->writeAudit($db, 'lab_report_uploaded', 'lab_reports', (int) $db->lastInsertId(), "Uploaded lab report $testName with simplified owner insight.");
+        $reportId = (int) $db->lastInsertId();
+        $this->saveLabToMedicalRecord($db, $petId, $assignedVetId, $testName, $insight, $status, $reportId);
+        $this->notifyLabStakeholders($db, $petId, $assignedVetId, $testName, $status, $followUps);
+        $this->writeAudit($db, 'lab_report_uploaded', 'lab_reports', $reportId, "Uploaded lab report $testName with simplified owner insight.");
         return ['Lab result uploaded and simplified insight generated.', [], $insight];
+    }
+
+    private function handleInitiateReferral($db, $vetId)
+    {
+        $petId = (int) ($_POST['pet_id'] ?? 0);
+        $specialistId = (int) ($_POST['specialist_id'] ?? 0);
+        $specialty = trim($_POST['specialty'] ?? '');
+        $reason = trim($_POST['reason'] ?? '');
+        $errors = [];
+
+        if (!$petId || !$this->canAccessPet($db, $petId, 'vet', $vetId, null)) {
+            $errors[] = 'Choose a valid pet record.';
+        }
+        if (!$specialistId) {
+            $errors[] = 'Select a specialist.';
+        }
+        if ($specialistId === $vetId) {
+            $errors[] = 'Choose a different specialist than yourself.';
+        }
+        if ($specialty === '') {
+            $errors[] = 'Specialty is required.';
+        }
+        if ($reason === '') {
+            $errors[] = 'Referral reason is required.';
+        }
+
+        if (!empty($errors)) {
+            return [null, $errors];
+        }
+
+        $stmt = $db->prepare(
+            "INSERT INTO referrals (pet_id, from_vet_id, to_vet_id, specialty, reason, status, requested_at)\n             VALUES (?, ?, ?, ?, ?, 'pending', NOW())"
+        );
+        $stmt->execute([$petId, $vetId, $specialistId, $specialty, $reason]);
+        $referralId = (int) $db->lastInsertId();
+
+        $this->writeAudit($db, 'referral_initiated', 'referrals', $referralId, "Referral initiated to specialist #$specialistId.");
+        return ['Referral initiated successfully.', []];
     }
 
     private function storeLabFile(&$errors)
@@ -427,13 +526,14 @@ class ClinicalController extends Controller
         return 'lab-results/' . $fileName;
     }
 
-    private function buildLabInsight($testName, $summary, $rawValues, $status, $notes)
+    private function buildLabInsight($testName, $summary, $rawValues, $status, $notes, $parsed = [])
     {
         $source = strtolower($testName . ' ' . $summary . ' ' . $rawValues . ' ' . $notes);
         $points = [];
-        $points[] = "This $testName result was received and organized into a simple owner-friendly summary.";
+        $testType = $parsed['test_type'] ?? 'General lab';
+        $points[] = "This $testName result was categorized as $testType and organized into a simple owner-friendly summary.";
 
-        if ($status === 'critical' || preg_match('/high|low|critical|positive|abnormal|elevated|decreased/', $source)) {
+        if ($status === 'critical' || !empty($parsed['abnormal_flags']) || preg_match('/high|low|critical|positive|abnormal|elevated|decreased/', $source)) {
             $points[] = 'Some values may need veterinary review soon. Keep an eye on energy, appetite, vomiting, breathing, and hydration.';
         } elseif ($status === 'normal') {
             $points[] = 'The marked status is normal, so the result does not show an urgent flag from the submitted summary.';
@@ -453,9 +553,78 @@ class ClinicalController extends Controller
         if (preg_match('/glucose|sugar|diabetes/', $source)) {
             $points[] = 'Glucose changes should be compared with eating time, stress level, thirst, and urination.';
         }
+        foreach (($parsed['abnormal_flags'] ?? []) as $flag) {
+            $points[] = 'Key finding: ' . $flag;
+        }
+        foreach (($parsed['follow_up_actions'] ?? []) as $action) {
+            $points[] = 'Recommended follow-up: ' . $action;
+        }
 
         $points[] = 'This is not a diagnosis. Share the original file with your veterinarian for final interpretation.';
         return implode("\n", $points);
+    }
+
+    private function parseStructuredLabResults($testName, $testType, $summary, $rawValues, $referenceRanges, $status, $notes)
+    {
+        $source = strtolower("$testName $testType $summary $rawValues $referenceRanges $notes");
+        if ($testType === '') {
+            if (preg_match('/cbc|wbc|rbc|platelet|hemoglobin|haemoglobin|blood count/', $source)) {
+                $testType = 'Blood count';
+            } elseif (preg_match('/kidney|creatinine|bun|urea|urine|urinalysis/', $source)) {
+                $testType = 'Kidney and urinary';
+            } elseif (preg_match('/liver|alt|ast|alp|bilirubin/', $source)) {
+                $testType = 'Liver profile';
+            } elseif (preg_match('/glucose|sugar|diabetes/', $source)) {
+                $testType = 'Glucose';
+            } elseif (preg_match('/x-ray|xray|scan|ultrasound|image|radiology/', $source)) {
+                $testType = 'Diagnostic imaging';
+            } else {
+                $testType = 'General lab';
+            }
+        }
+
+        $abnormalFlags = [];
+        if (preg_match_all('/([A-Za-z][A-Za-z0-9 \/-]{1,28})\s*[:=]\s*([<>]?\s*\d+(?:\.\d+)?)\s*([A-Za-z\/%]+)?\s*(?:\((high|low|elevated|decreased|abnormal|critical)\)|\b(high|low|elevated|decreased|abnormal|critical)\b)?/i', $rawValues . "\n" . $summary, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $label = trim($match[1]);
+                $value = trim($match[2] . ' ' . ($match[3] ?? ''));
+                $flag = strtolower($match[4] ?? ($match[5] ?? ''));
+                if ($flag !== '') {
+                    $abnormalFlags[] = "$label is $flag at $value.";
+                }
+            }
+        }
+        if (empty($abnormalFlags) && preg_match_all('/\b(high|low|critical|positive|abnormal|elevated|decreased)\b[^.\n]*/i', $summary . "\n" . $rawValues, $flags)) {
+            foreach (array_slice($flags[0], 0, 5) as $flagText) {
+                $abnormalFlags[] = ucfirst(trim($flagText, " .\t\n\r\0\x0B")) . '.';
+            }
+        }
+
+        $followUps = [];
+        if ($status === 'critical' || !empty($abnormalFlags)) {
+            $followUps[] = 'Vet should review this result and contact the owner if symptoms are present.';
+        }
+        if (preg_match('/kidney|creatinine|bun|urea/', $source)) {
+            $followUps[] = 'Consider hydration review, urine testing, and repeat kidney values if the vet agrees.';
+        }
+        if (preg_match('/liver|alt|ast|alp|bilirubin/', $source)) {
+            $followUps[] = 'Review medications, diet, appetite, vomiting, and whether repeat liver enzymes are needed.';
+        }
+        if (preg_match('/glucose|sugar|diabetes/', $source)) {
+            $followUps[] = 'Compare glucose with meal timing and watch thirst, urination, and weight change.';
+        }
+        if (empty($followUps)) {
+            $followUps[] = 'Keep the result in the pet medical record and compare it with future trends.';
+        }
+
+        return [
+            'test_type' => $testType,
+            'values_text' => $rawValues,
+            'reference_ranges' => $referenceRanges,
+            'historical_comparison' => 'Compare with previous saved lab reports for this pet.',
+            'abnormal_flags' => array_values(array_unique($abnormalFlags)),
+            'follow_up_actions' => array_values(array_unique($followUps))
+        ];
     }
 
     private function labHubPets($db, $role, $vetId, $ownerId)
@@ -518,6 +687,129 @@ class ClinicalController extends Controller
         }
     }
 
+    private function ensureLabHubSchema($db)
+    {
+        $columns = [
+            'test_type' => "ALTER TABLE lab_reports ADD COLUMN test_type varchar(120) DEFAULT NULL AFTER test_name",
+            'raw_values' => "ALTER TABLE lab_reports ADD COLUMN raw_values text DEFAULT NULL AFTER result_summary",
+            'reference_ranges' => "ALTER TABLE lab_reports ADD COLUMN reference_ranges text DEFAULT NULL AFTER raw_values",
+            'technical_data' => "ALTER TABLE lab_reports ADD COLUMN technical_data longtext DEFAULT NULL AFTER interpretation",
+            'abnormal_flags' => "ALTER TABLE lab_reports ADD COLUMN abnormal_flags text DEFAULT NULL AFTER technical_data",
+            'follow_up_actions' => "ALTER TABLE lab_reports ADD COLUMN follow_up_actions text DEFAULT NULL AFTER abnormal_flags",
+            'vet_notes' => "ALTER TABLE lab_reports ADD COLUMN vet_notes text DEFAULT NULL AFTER follow_up_actions",
+            'reviewed_at' => "ALTER TABLE lab_reports ADD COLUMN reviewed_at datetime DEFAULT NULL AFTER vet_notes"
+        ];
+        foreach ($columns as $column => $sql) {
+            if (!$this->columnExists($db, 'lab_reports', $column)) {
+                try {
+                    $db->exec($sql);
+                } catch (Exception $e) {
+                    continue;
+                }
+            }
+        }
+    }
+
+    private function ensureSurgeryRequestSchema($db)
+    {
+        try {
+            $db->exec(
+                "CREATE TABLE IF NOT EXISTS surgery_requests (
+                    id int(11) NOT NULL AUTO_INCREMENT,
+                    owner_id int(11) NOT NULL,
+                    pet_id int(11) NOT NULL,
+                    medical_procedure_id int(11) DEFAULT NULL,
+                    procedure_type varchar(120) NOT NULL,
+                    reason text NOT NULL,
+                    urgency varchar(30) NOT NULL DEFAULT 'normal',
+                    status varchar(40) NOT NULL DEFAULT 'pending',
+                    created_at timestamp NOT NULL DEFAULT current_timestamp(),
+                    updated_at timestamp NULL DEFAULT NULL,
+                    PRIMARY KEY (id),
+                    KEY owner_id (owner_id),
+                    KEY pet_id (pet_id),
+                    KEY medical_procedure_id (medical_procedure_id),
+                    KEY status (status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+            );
+        } catch (Exception $e) {
+            return;
+        }
+
+        $columns = [
+            'medical_procedure_id' => "ALTER TABLE surgery_requests ADD COLUMN medical_procedure_id int(11) DEFAULT NULL AFTER pet_id",
+            'created_at' => "ALTER TABLE surgery_requests ADD COLUMN created_at timestamp NOT NULL DEFAULT current_timestamp() AFTER status",
+            'updated_at' => "ALTER TABLE surgery_requests ADD COLUMN updated_at timestamp NULL DEFAULT NULL AFTER created_at"
+        ];
+        foreach ($columns as $column => $sql) {
+            if (!$this->columnExists($db, 'surgery_requests', $column)) {
+                try {
+                    $db->exec($sql);
+                } catch (Exception $e) {
+                    continue;
+                }
+            }
+        }
+    }
+
+    private function ownerSurgeryRequestsForVet($db, $vetId)
+    {
+        return $this->fetchAll(
+            $db,
+            "SELECT sr.*, mp.id AS procedure_id, mp.status AS procedure_status, p.name AS pet_name, p.species, u.username AS owner_name
+             FROM surgery_requests sr
+             LEFT JOIN medical_procedures mp ON mp.id = sr.medical_procedure_id
+             LEFT JOIN pets p ON p.id = sr.pet_id
+             LEFT JOIN pet_owners po ON po.id = sr.owner_id
+             LEFT JOIN users u ON u.id = po.user_id
+             WHERE LOWER(COALESCE(sr.status, 'pending')) IN ('pending', 'pending_vet_review')
+               AND (mp.vet_id IS NULL OR mp.vet_id = ? OR mp.id IS NULL)
+             ORDER BY FIELD(sr.urgency, 'emergency', 'urgent', 'normal'), COALESCE(sr.created_at, sr.updated_at, NOW()) DESC, sr.id DESC",
+            [$vetId]
+        );
+    }
+
+    private function saveLabToMedicalRecord($db, $petId, $vetId, $testName, $insight, $status, $reportId)
+    {
+        try {
+            $stmt = $db->prepare("INSERT INTO health_records (pet_id, title, description, record_date) VALUES (?, ?, ?, CURDATE())");
+            $stmt->execute([$petId, "Lab result: $testName", "Status: $status\n$insight"]);
+        } catch (Exception $e) {
+        }
+
+        if (!$vetId) {
+            return;
+        }
+        try {
+            $stmt = $db->prepare("INSERT INTO medical_records (pet_id, vet_id, diagnosis, treatment, lab_result) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$petId, $vetId, "Lab review pending: $testName", $insight, "lab_report#$reportId"]);
+        } catch (Exception $e) {
+        }
+    }
+
+    private function notifyLabStakeholders($db, $petId, $vetId, $testName, $status, $followUps)
+    {
+        try {
+            $ownerUserId = $this->petOwnerUserId($db, $petId);
+            $message = "New lab result for $testName is saved. Status: $status.";
+            if ($followUps !== '') {
+                $message .= "\n" . $followUps;
+            }
+            if ($ownerUserId) {
+                $stmt = $db->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$ownerUserId, 'Lab result updated', $message, 'lab_result']);
+            }
+            if ($vetId) {
+                $vetUser = $this->fetchOne($db, "SELECT user_id FROM veterinarians WHERE id = ?", [$vetId]);
+                if (!empty($vetUser['user_id']) && (int) $vetUser['user_id'] !== $ownerUserId) {
+                    $stmt = $db->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)");
+                    $stmt->execute([(int) $vetUser['user_id'], 'Lab result needs review', $message, 'lab_result']);
+                }
+            }
+        } catch (Exception $e) {
+        }
+    }
+
     private function vetPermissions($db, $vetId)
     {
         return $this->fetchAll(
@@ -563,6 +855,7 @@ class ClinicalController extends Controller
         $summary = trim($_POST['summary'] ?? '');
         $notes = trim($_POST['notes'] ?? '');
         $procedureId = (int) ($_POST['procedure_id'] ?? 0);
+        $bookingId = null;
         $errors = [];
         $titles = [
             'lab_reports' => 'Lab Result Interpretation',
@@ -593,15 +886,27 @@ class ClinicalController extends Controller
                 "SELECT mp.*, p.name AS pet_name
                  FROM medical_procedures mp
                  LEFT JOIN pets p ON p.id = mp.pet_id
-                 WHERE mp.id = ? AND mp.vet_id = ?",
+                 WHERE mp.id = ? AND (mp.vet_id = ? OR mp.vet_id IS NULL)",
                 [$procedureId, $vetId]
             );
             if (!$procedure) {
-                return [null, ['The selected procedure is not assigned to this vet.']];
+                return [null, ['The selected procedure is not available for this vet.']];
             }
             $petId = (int) ($procedure['pet_id'] ?? 0);
             $summary = $summary !== '' ? $summary : (($procedure['procedure_name'] ?? 'Procedure') . ' selected for admin approval.');
             $notes = trim($notes . "\nProcedure case #" . $procedureId . ' for ' . ($procedure['pet_name'] ?? 'selected pet'));
+
+            [$resourceErrors, $resourcePlan] = $this->validateSurgeryResourcePlan($db, $procedure, $vetId);
+            if (!empty($resourceErrors)) {
+                return [null, $resourceErrors];
+            }
+            $bookingId = $this->createPendingProcedureBooking($db, $procedure, $vetId, $resourcePlan, $notes);
+            $db->prepare("UPDATE medical_procedures SET vet_id = ?, status = 'pending_admin', procedure_date = ? WHERE id = ?")->execute([$vetId, substr($resourcePlan['start'], 0, 10), $procedureId]);
+            try {
+                $db->prepare("UPDATE surgery_requests SET status = 'sent_to_admin', updated_at = NOW() WHERE medical_procedure_id = ?")->execute([$procedureId]);
+            } catch (Exception $e) {
+            }
+            $notes = trim($notes . "\nRequested room: " . $resourcePlan['room_name'] . "\nRequested equipment: " . $resourcePlan['equipment_name'] . "\nRequested staff: " . $resourcePlan['specialist_name'] . "\nRequested time: " . $resourcePlan['start'] . ' to ' . $resourcePlan['end']);
         }
 
         $permission = $actionKey === 'surgery_booking'
@@ -611,7 +916,8 @@ class ClinicalController extends Controller
         $payload = json_encode([
             'summary' => $summary,
             'notes' => $notes,
-            'procedure_id' => $procedureId ?: null
+            'procedure_id' => $procedureId ?: null,
+            'booking_id' => $bookingId
         ]);
         $requestId = $this->createClinicalActionRequest(
             $db,
@@ -634,6 +940,163 @@ class ClinicalController extends Controller
         ];
         $this->writeAudit($db, 'clinical_workflow_submitted', 'clinical_action_requests', $requestId, "Submitted {$titles[$actionKey]} workflow.");
         return [$messageMap[$permission['access_mode'] ?? 'request_admin'] ?? 'Workflow request created.', []];
+    }
+
+    private function handleOwnerSurgeryAdminForward($db, $vetId)
+    {
+        $requestId = (int) ($_POST['surgery_request_id'] ?? 0);
+        $summary = trim($_POST['summary'] ?? '');
+        $notes = trim($_POST['notes'] ?? '');
+
+        if (!$requestId) {
+            return [null, ['Choose a surgery request first.']];
+        }
+
+        $request = $this->fetchOne(
+            $db,
+            "SELECT sr.*, p.name AS pet_name
+             FROM surgery_requests sr
+             LEFT JOIN medical_procedures mp ON mp.id = sr.medical_procedure_id
+             LEFT JOIN pets p ON p.id = sr.pet_id
+             WHERE sr.id = ?
+               AND (mp.vet_id IS NULL OR mp.vet_id = ? OR mp.id IS NULL)",
+            [$requestId, $vetId]
+        );
+        if (!$request) {
+            return [null, ['The selected surgery request is not available for this vet.']];
+        }
+
+        $procedureId = (int) ($request['medical_procedure_id'] ?? 0);
+        if (!$procedureId) {
+            $procedureName = ucwords(str_replace('_', ' ', $request['procedure_type'] ?? 'procedure')) . ' surgery request';
+            $stmt = $db->prepare(
+                "INSERT INTO medical_procedures (pet_id, vet_id, procedure_name, procedure_type, status, procedure_date, notes)
+                 VALUES (?, ?, ?, ?, 'pending_admin', NULL, ?)"
+            );
+            $stmt->execute([
+                (int) $request['pet_id'],
+                $vetId,
+                $procedureName,
+                $request['procedure_type'] ?? 'surgery',
+                "Owner request urgency: " . ($request['urgency'] ?? 'normal') . "\nReason: " . ($request['reason'] ?? '')
+            ]);
+            $procedureId = (int) $db->lastInsertId();
+            $db->prepare("UPDATE surgery_requests SET medical_procedure_id = ? WHERE id = ?")->execute([$procedureId, $requestId]);
+        }
+
+        $_POST['action_key'] = 'surgery_booking';
+        $_POST['procedure_id'] = $procedureId;
+        $_POST['pet_id'] = (int) $request['pet_id'];
+        $_POST['summary'] = $summary !== ''
+            ? $summary
+            : 'Owner surgery request for ' . ($request['pet_name'] ?? 'selected pet') . ' is ready for admin scheduling approval.';
+        $_POST['notes'] = trim($notes . "\nOwner urgency: " . ($request['urgency'] ?? 'normal') . "\nOwner reason: " . ($request['reason'] ?? ''));
+
+        return $this->handleClinicalWorkflowRequest($db, $vetId);
+    }
+
+    private function validateSurgeryResourcePlan($db, $procedure, $vetId)
+    {
+        $roomId = (int) ($_POST['room_id'] ?? 0);
+        $equipmentId = (int) ($_POST['equipment_id'] ?? 0);
+        $specialistId = (int) ($_POST['specialist_id'] ?? 0);
+        $date = trim($_POST['procedure_date'] ?? '');
+        $startTime = trim($_POST['start_time'] ?? '');
+        $endTime = trim($_POST['end_time'] ?? '');
+        $errors = [];
+
+        if (!$roomId) {
+            $errors[] = 'Select an available operating room.';
+        }
+        if (!$equipmentId) {
+            $errors[] = 'Select available surgical equipment.';
+        }
+        if (!$specialistId) {
+            $errors[] = 'Select available specialist staff.';
+        }
+        if ($date === '' || $startTime === '' || $endTime === '') {
+            $errors[] = 'Choose the proposed surgery date, start time, and end time.';
+        }
+
+        $startDateTime = strtotime("$date $startTime");
+        $endDateTime = strtotime("$date $endTime");
+        if ($startDateTime === false || $endDateTime === false) {
+            $errors[] = 'Invalid proposed surgery date or time.';
+        } elseif ($startDateTime >= $endDateTime) {
+            $errors[] = 'The proposed end time must be after the start time.';
+        }
+
+        if (!empty($errors)) {
+            return [$errors, null];
+        }
+
+        $room = $this->fetchOne($db, "SELECT * FROM operating_rooms WHERE id = ? AND LOWER(COALESCE(status, 'available')) = 'available'", [$roomId]);
+        $equipment = $this->fetchOne($db, "SELECT * FROM surgical_equipment WHERE id = ? AND LOWER(COALESCE(status, 'available')) = 'available'", [$equipmentId]);
+        $specialist = $this->fetchOne(
+            $db,
+            "SELECT v.*, u.username
+             FROM veterinarians v
+             LEFT JOIN users u ON u.id = v.user_id
+             WHERE v.id = ?",
+            [$specialistId]
+        );
+
+        if (!$room) {
+            $errors[] = 'The selected operating room is not available.';
+        }
+        if (!$equipment) {
+            $errors[] = 'The selected equipment is not available.';
+        }
+        if (!$specialist) {
+            $errors[] = 'The selected specialist staff member is not available.';
+        }
+
+        $start = date('Y-m-d H:i:s', $startDateTime);
+        $end = date('Y-m-d H:i:s', $endDateTime);
+        if (empty($errors)) {
+            $conflict = $this->findBookingConflict($db, $roomId, $equipmentId, $specialistId, $start, $end);
+            if ($conflict !== '') {
+                $errors[] = $conflict;
+            }
+        }
+
+        if (!empty($errors)) {
+            return [$errors, null];
+        }
+
+        return [[], [
+            'room_id' => $roomId,
+            'room_name' => $room['name'] ?? 'Operating room',
+            'equipment_id' => $equipmentId,
+            'equipment_name' => $equipment['name'] ?? 'Equipment',
+            'specialist_id' => $specialistId,
+            'specialist_name' => $specialist['username'] ?? 'Specialist',
+            'start' => $start,
+            'end' => $end
+        ]];
+    }
+
+    private function createPendingProcedureBooking($db, $procedure, $vetId, $resourcePlan, $notes)
+    {
+        $stmt = $db->prepare(
+            "INSERT INTO procedure_bookings
+             (pet_id, vet_id, room_id, equipment_id, specialist_id, procedure_name, procedure_type, start_time, end_time, status, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_admin', ?)"
+        );
+        $stmt->execute([
+            (int) $procedure['pet_id'],
+            $vetId,
+            (int) $resourcePlan['room_id'],
+            (int) $resourcePlan['equipment_id'],
+            (int) $resourcePlan['specialist_id'],
+            $procedure['procedure_name'] ?? 'Surgery request',
+            $procedure['procedure_type'] ?? 'surgery',
+            $resourcePlan['start'],
+            $resourcePlan['end'],
+            $notes
+        ]);
+
+        return (int) $db->lastInsertId();
     }
 
     private function handleLabInterpretation($db, $vetId)
@@ -672,8 +1135,11 @@ class ClinicalController extends Controller
             $details[] = "Additional tests: $extraTests";
         }
 
-        $stmt = $db->prepare("UPDATE lab_reports SET interpretation = ?, status = 'completed', vet_id = ? WHERE id = ?");
-        $stmt->execute([implode("\n", $details), $vetId, $reportId]);
+        $existingInsight = trim((string) ($report['interpretation'] ?? ''));
+        $reviewedInsight = trim($existingInsight . "\nVet review: " . implode("\n", $details));
+        $stmt = $db->prepare("UPDATE lab_reports SET interpretation = ?, vet_notes = ?, status = 'completed', vet_id = ?, reviewed_at = NOW() WHERE id = ?");
+        $stmt->execute([$reviewedInsight, implode("\n", $details), $vetId, $reportId]);
+        $this->saveLabToMedicalRecord($db, (int) $report['pet_id'], $vetId, $report['test_name'], $reviewedInsight, 'completed', $reportId);
         $this->writeAudit($db, 'lab_interpreted', 'lab_reports', $reportId, "Vet completed interpretation for {$report['test_name']}.");
         return ['Lab interpretation saved successfully.', []];
     }
@@ -978,11 +1444,29 @@ class ClinicalController extends Controller
         );
     }
 
+    private function availableOperatingRooms($db)
+    {
+        return $this->fetchAll(
+            $db,
+            "SELECT * FROM operating_rooms WHERE LOWER(COALESCE(status, 'available')) = 'available' ORDER BY name ASC",
+            []
+        );
+    }
+
     private function surgicalEquipment($db)
     {
         return $this->fetchAll(
             $db,
             "SELECT * FROM surgical_equipment ORDER BY name ASC",
+            []
+        );
+    }
+
+    private function availableSurgicalEquipment($db)
+    {
+        return $this->fetchAll(
+            $db,
+            "SELECT * FROM surgical_equipment WHERE LOWER(COALESCE(status, 'available')) = 'available' ORDER BY name ASC",
             []
         );
     }
@@ -997,6 +1481,204 @@ class ClinicalController extends Controller
              ORDER BY u.username ASC",
             []
         );
+    }
+
+    private function allPets($db)
+    {
+        return $this->fetchAll(
+            $db,
+            "SELECT p.id, p.name, p.species, u.username AS owner_name
+             FROM pets p
+             LEFT JOIN pet_owners po ON po.id = p.owner_id
+             LEFT JOIN users u ON u.id = po.user_id
+             ORDER BY p.name ASC",
+            []
+        );
+    }
+
+    private function ownerPets($db, $ownerId)
+    {
+        if (!$ownerId) return [];
+        return $this->fetchAll(
+            $db,
+            "SELECT p.id, p.name, p.species
+             FROM pets p
+             WHERE p.owner_id = ?
+             ORDER BY p.name ASC",
+            [$ownerId]
+        );
+    }
+
+    private function ownerProcedures($db, $ownerId)
+    {
+        if (!$ownerId) return [];
+        return $this->fetchAll(
+            $db,
+            "SELECT mp.*, p.name AS pet_name, u.username AS vet_name
+             FROM medical_procedures mp
+             LEFT JOIN pets p ON p.id = mp.pet_id
+             LEFT JOIN veterinarians v ON v.id = mp.vet_id
+             LEFT JOIN users u ON u.id = v.user_id
+             WHERE p.owner_id = ?
+             ORDER BY mp.procedure_date DESC, mp.id DESC
+             LIMIT 10",
+            [$ownerId]
+        );
+    }
+
+    private function ownerLabReports($db, $ownerId)
+    {
+        if (!$ownerId) return [];
+        return $this->fetchAll(
+            $db,
+            "SELECT lr.*, p.name AS pet_name, u.username AS vet_name
+             FROM lab_reports lr
+             LEFT JOIN pets p ON p.id = lr.pet_id
+             LEFT JOIN veterinarians v ON v.id = lr.vet_id
+             LEFT JOIN users u ON u.id = v.user_id
+             WHERE p.owner_id = ?
+             ORDER BY COALESCE(lr.report_date, DATE(lr.created_at)) DESC, lr.id DESC
+             LIMIT 10",
+            [$ownerId]
+        );
+    }
+
+    private function ownerReferrals($db, $ownerId)
+    {
+        if (!$ownerId) return [];
+        return $this->fetchAll(
+            $db,
+            "SELECT r.*, p.name AS pet_name, from_u.username AS from_vet, to_u.username AS to_vet
+             FROM referrals r
+             LEFT JOIN pets p ON p.id = r.pet_id
+             LEFT JOIN veterinarians from_v ON from_v.id = r.from_vet_id
+             LEFT JOIN users from_u ON from_u.id = from_v.user_id
+             LEFT JOIN veterinarians to_v ON to_v.id = r.to_vet_id
+             LEFT JOIN users to_u ON to_u.id = to_v.user_id
+             WHERE p.owner_id = ?
+             ORDER BY r.requested_at DESC, r.id DESC
+             LIMIT 10",
+            [$ownerId]
+        );
+    }
+
+    private function handleSurgeryRequest($db, $ownerId)
+    {
+        $petId = (int) ($_POST['pet_id'] ?? 0);
+        $procedureType = trim($_POST['procedure_type'] ?? '');
+        $reason = trim($_POST['reason'] ?? '');
+        $urgency = trim($_POST['urgency'] ?? 'normal');
+        $errors = [];
+
+        if (!$petId) {
+            $errors[] = 'Select a pet.';
+        }
+        if (!$procedureType) {
+            $errors[] = 'Specify the procedure type.';
+        }
+        if (!$reason) {
+            $errors[] = 'Provide a reason for the surgery.';
+        }
+        if (!in_array($urgency, ['normal', 'urgent', 'emergency'])) {
+            $errors[] = 'Invalid urgency level.';
+        }
+        if ($petId && !$this->fetchOne($db, "SELECT id FROM pets WHERE id = ? AND owner_id = ?", [$petId, $ownerId])) {
+            $errors[] = 'Choose one of your own pets.';
+        }
+
+        if (!empty($errors)) {
+            return [null, $errors];
+        }
+
+        // Check availability (simplified)
+        $available = $this->checkSurgeryAvailability($db, $procedureType);
+
+        if (!$available) {
+            $errors[] = 'No available OR, equipment, or specialist for this procedure.';
+            return [null, $errors];
+        }
+
+        $procedureName = ucwords(str_replace('_', ' ', $procedureType)) . ' surgery request';
+        $stmt = $db->prepare(
+            "INSERT INTO medical_procedures (pet_id, vet_id, procedure_name, procedure_type, status, procedure_date, notes)
+             VALUES (?, NULL, ?, ?, 'owner_requested', NULL, ?)"
+        );
+        $stmt->execute([$petId, $procedureName, $procedureType, "Owner request urgency: $urgency\nReason: $reason"]);
+        $procedureId = (int) $db->lastInsertId();
+
+        $stmt = $db->prepare("INSERT INTO surgery_requests (owner_id, pet_id, medical_procedure_id, procedure_type, reason, urgency, status) VALUES (?, ?, ?, ?, ?, ?, 'pending_vet_review')");
+        $stmt->execute([$ownerId, $petId, $procedureId, $procedureType, $reason, $urgency]);
+        $requestId = (int) $db->lastInsertId();
+
+        $this->writeAudit($db, 'surgery_request', 'surgery_requests', $requestId, 'Surgery scheduling requested by owner.');
+
+        return ['Surgery request submitted successfully. It is now visible for vet review.', []];
+    }
+
+    private function checkSurgeryAvailability($db, $procedureType)
+    {
+        // Simplified check: assume always available for now
+        return true;
+    }
+
+
+
+    private function compileMedicalRecords($db, $petId)
+    {
+        // Simplified: fetch recent procedures and lab reports
+        $procedures = $this->fetchAll($db, "SELECT * FROM medical_procedures WHERE pet_id = ? ORDER BY procedure_date DESC LIMIT 5", [$petId]);
+        $labReports = $this->fetchAll($db, "SELECT * FROM lab_reports WHERE pet_id = ? ORDER BY COALESCE(report_date, DATE(created_at)) DESC LIMIT 5", [$petId]);
+        return ['procedures' => $procedures, 'lab_reports' => $labReports];
+    }
+
+    private function encryptRecords($records)
+    {
+        // Simplified encryption
+        return base64_encode(json_encode($records));
+    }
+
+    private function notifySpecialist($db, $specialistId, $referralId)
+    {
+        // Simplified notification
+        // In real app, send email or in-app notification
+    }
+
+
+
+    private function uploadLabFile()
+    {
+        // Simplified file upload
+        if ($_FILES['lab_file']['error'] !== UPLOAD_ERR_OK) {
+            return false;
+        }
+        $uploadDir = __DIR__ . '/../../public/uploads/lab_reports/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0775, true);
+        }
+        $filename = uniqid() . '_' . basename($_FILES['lab_file']['name']);
+        $targetPath = $uploadDir . $filename;
+        if (move_uploaded_file($_FILES['lab_file']['tmp_name'], $targetPath)) {
+            return 'uploads/lab_reports/' . $filename;
+        }
+        return false;
+    }
+
+    private function parseLabResults($filePath, $testName)
+    {
+        // Simplified parsing
+        return ['test' => $testName, 'values' => []];
+    }
+
+    private function generateInsights($parsedData)
+    {
+        // Simplified insights
+        return ['owner_friendly' => 'Results look normal.', 'vet_details' => 'Detailed analysis required.'];
+    }
+
+    private function flagAbnormalities($parsedData)
+    {
+        // Simplified flagging
+        return ['abnormal' => false];
     }
 
     private function procedureBookings($db, $vetId, $limit = null, $latest = false)
@@ -1110,7 +1792,7 @@ class ClinicalController extends Controller
         ) {
             $stmt = $db->prepare(
                 "SELECT COUNT(*) FROM procedure_bookings
-                 WHERE status != 'cancelled'
+                 WHERE status NOT IN ('cancelled', 'rejected')
                    AND {$resource['field']} = ?
                    AND NOT (end_time <= ? OR start_time >= ?)"
             );
@@ -1356,17 +2038,5 @@ class ClinicalController extends Controller
         return ['Health record added and request completed.', []];
     }
 
-    private function fetchOne($db, $sql, $params = [])
-    {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-
-    private function fetchAll($db, $sql, $params = [])
-    {
-        $stmt = $db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
 }
+

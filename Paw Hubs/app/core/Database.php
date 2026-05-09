@@ -148,6 +148,9 @@ class Database
           `status` varchar(40) DEFAULT 'pending',
           `report_date` date DEFAULT NULL,
           `file_path` varchar(255) DEFAULT NULL,
+          `parsed_data` text DEFAULT NULL,
+          `insights` text DEFAULT NULL,
+          `flags` text DEFAULT NULL,
           `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -162,6 +165,21 @@ class Database
           `priority` varchar(40) DEFAULT 'normal',
           `status` varchar(40) DEFAULT 'pending',
           `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          `medical_records` text DEFAULT NULL,
+          `notes` text DEFAULT NULL,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        CREATE TABLE IF NOT EXISTS `surgery_requests` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `owner_id` int(11) NOT NULL,
+          `pet_id` int(11) NOT NULL,
+          `procedure_type` varchar(120) NOT NULL,
+          `reason` text DEFAULT NULL,
+          `urgency` varchar(40) DEFAULT 'normal',
+          `status` varchar(40) DEFAULT 'pending',
+          `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          `scheduled_at` datetime DEFAULT NULL,
           `notes` text DEFAULT NULL,
           PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -846,6 +864,22 @@ class Database
     $this->addColumnIfMissing('referrals', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `priority`");
     $this->addColumnIfMissing('referrals', 'requested_at', "`requested_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`");
     $this->addColumnIfMissing('referrals', 'notes', "`notes` text DEFAULT NULL AFTER `requested_at`");
+
+    $this->addColumnIfMissing('lab_reports', 'parsed_data', "`parsed_data` text DEFAULT NULL AFTER `file_path`");
+    $this->addColumnIfMissing('lab_reports', 'insights', "`insights` text DEFAULT NULL AFTER `parsed_data`");
+    $this->addColumnIfMissing('lab_reports', 'flags', "`flags` text DEFAULT NULL AFTER `insights`");
+
+    $this->addColumnIfMissing('referrals', 'medical_records', "`medical_records` text DEFAULT NULL AFTER `requested_at`");
+
+    $this->addColumnIfMissing('surgery_requests', 'owner_id', "`owner_id` int(11) NOT NULL AFTER `id`");
+    $this->addColumnIfMissing('surgery_requests', 'pet_id', "`pet_id` int(11) NOT NULL AFTER `owner_id`");
+    $this->addColumnIfMissing('surgery_requests', 'procedure_type', "`procedure_type` varchar(120) NOT NULL AFTER `pet_id`");
+    $this->addColumnIfMissing('surgery_requests', 'reason', "`reason` text DEFAULT NULL AFTER `procedure_type`");
+    $this->addColumnIfMissing('surgery_requests', 'urgency', "`urgency` varchar(40) DEFAULT 'normal' AFTER `reason`");
+    $this->addColumnIfMissing('surgery_requests', 'status', "`status` varchar(40) DEFAULT 'pending' AFTER `urgency`");
+    $this->addColumnIfMissing('surgery_requests', 'requested_at', "`requested_at` timestamp NOT NULL DEFAULT current_timestamp() AFTER `status`");
+    $this->addColumnIfMissing('surgery_requests', 'scheduled_at', "`scheduled_at` datetime DEFAULT NULL AFTER `requested_at`");
+    $this->addColumnIfMissing('surgery_requests', 'notes', "`notes` text DEFAULT NULL AFTER `scheduled_at`");
 
     $this->addColumnIfMissing('audit_logs', 'user_id', "`user_id` int(11) DEFAULT NULL AFTER `id`");
     $this->addColumnIfMissing('audit_logs', 'admin_id', "`admin_id` int(11) DEFAULT NULL AFTER `user_id`");
