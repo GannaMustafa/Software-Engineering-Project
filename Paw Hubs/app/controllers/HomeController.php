@@ -30,10 +30,7 @@ class HomeController extends Controller {
         $pets = [];
         $petIds = [];
         if ($ownerId) {
-            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id IN (?, ?) ORDER BY id DESC", [$ownerId, $userId]);
-            $petIds = array_column($pets, 'id');
-        } else {
-            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id = ? ORDER BY id DESC", [$userId]);
+            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id = ? ORDER BY id DESC", [$ownerId]);
             $petIds = array_column($pets, 'id');
         }
 
