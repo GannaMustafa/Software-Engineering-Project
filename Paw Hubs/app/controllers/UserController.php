@@ -74,8 +74,16 @@ class UserController extends Controller {
         $owner = $this->fetchOne($db, "SELECT id FROM pet_owners WHERE user_id = ?", [$userId]);
         $ownerId = $owner['id'] ?? null;
 
+        $pets = [];
+        if ($ownerId) {
+            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id IN (?, ?)", [$ownerId, $userId]);
+        } else {
+            $pets = $this->fetchAll($db, "SELECT * FROM pets WHERE owner_id = ?", [$userId]);
+        }
+
         $this->view('user/profile', [
             'user' => $userData,
+            'pets' => $pets,
             'errors' => $errors,
             'success' => $success,
             'history' => [
