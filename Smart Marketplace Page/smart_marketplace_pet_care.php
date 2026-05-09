@@ -548,6 +548,21 @@ if (!empty($_SESSION['user_id'])) {
   }
 }
 
+$marketplaceProducts = [];
+
+try {
+  $db = Database::getInstance()->getConnection();
+  $stmt = $db->query("
+    SELECT mi.*, v.name AS vendor_name
+    FROM marketplace_items mi
+    LEFT JOIN vendors v ON v.id = mi.vendor_id
+    WHERE mi.stock > 0
+    ORDER BY mi.created_at DESC, mi.id DESC
+  ");
+  $marketplaceProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+  $marketplaceProducts = [];
+}
 
 ?>
 
@@ -731,236 +746,43 @@ if (!empty($_SESSION['user_id'])) {
     </div>
 
     <div class="row g-4 row-cols-2 row-cols-md-3 row-cols-lg-4">
-
-      <div class="col" data-category="therapeutic-diets">
-        <div class="product">
-          <span class="badge-tag badge-rx"><i class="bi bi-prescription2"></i> RX REQUIRED</span>
-          <div class="product-img"><img src="images/Renal-Care-Diet.jpg" alt="Renal Care Diet" loading="lazy"></div>
-          <div class="product-body">
-            <h5>Renal Care Diet</h5>
-            <div class="brand">Hill's Prescription</div>
-            <div class="price">EGP 2,400</div>
-
-            <?php if (!empty($renalCareDietRequest['is_approved'])): ?>
-              <div class="rx-info"><i class="bi bi-check-circle-fill"></i><span>Vet approved. You can buy it now.</span></div>
+      <?php foreach ($marketplaceProducts as $product): ?>
+        <?php
+        $category = strtolower(trim((string)($product['category'] ?? '')));
+        $categorySlug = preg_replace('/[^a-z0-9]+/', '-', $category);
+        $categorySlug = trim($categorySlug, '-') ?: 'all';
+        $image = trim((string)($product['image'] ?? ''));
+        $imageSrc = $image !== '' ? 'images/' . htmlspecialchars($image) : 'images/Dry-Food.jpg';
+        ?>
+        <div class="col" data-category="<?= htmlspecialchars($categorySlug) ?>">
+          <div class="product">
+            <div class="product-img">
+              <img src="<?= $imageSrc ?>" alt="<?= htmlspecialchars($product['name']) ?>" loading="lazy">
+            </div>
+            <div class="product-body">
+              <h5><?= htmlspecialchars($product['name']) ?></h5>
+              <div class="brand"><?= htmlspecialchars($product['vendor_name'] ?? 'Marketplace Vendor') ?></div>
+              <div class="price">EGP <?= number_format((float)$product['price'], 0) ?></div>
+              <div class="allergy-safe">
+                <i class="bi bi-box-seam"></i>
+                <?= htmlspecialchars($product['short_description'] ?? 'Available now') ?>
+              </div>
               <div class="mt-auto pt-3">
                 <button class="btn-primary-soft add-to-cart-btn"
-                  data-name="Renal Care Diet"
-                  data-brand="Hill's Prescription"
-                  data-price="2400"
+                  data-name="<?= htmlspecialchars($product['name']) ?>"
+                  data-brand="<?= htmlspecialchars($product['vendor_name'] ?? 'Marketplace Vendor') ?>"
+                  data-price="<?= htmlspecialchars((string)$product['price']) ?>"
                   data-bg="bg-green"
-                  data-badge="rx"
-                  data-badge-label="RX APPROVED"
-                  data-pts="48">
+                  data-badge=""
+                  data-badge-label=""
+                  data-pts="<?= max(1, (int)((float)$product['price'] / 50)) ?>">
                   <i class="bi bi-cart-plus"></i> Add to Cart
                 </button>
               </div>
-            <?php elseif (!empty($renalCareDietRequest['is_pending'])): ?>
-              <div class="rx-info"><i class="bi bi-hourglass-split"></i><span>Approval request sent. Waiting for vet approval.</span></div>
-              <div class="mt-auto pt-3">
-                <button class="btn-primary-soft btn-locked" disabled><i class="bi bi-lock"></i> Pending Vet Approval</button>
-              </div>
-            <?php else: ?>
-              <?php if (!empty($petHasVet)): ?>
-                <div class="rx-info"><i class="bi bi-lock-fill"></i><span>Vet prescription required before buying.</span></div>
-                <form method="post" class="mt-auto pt-3">
-                  <input type="hidden" name="action" value="request_renal_care_diet">
-                  <button class="btn-primary-soft" type="submit"><i class="bi bi-send"></i> Request Vet Approval</button>
-                </form>
-              <?php else: ?>
-                <div class="rx-info"><i class="bi bi-exclamation-circle"></i><span>No vet is linked to this pet yet.</span></div>
-                <div class="mt-auto pt-3">
-                  <button class="btn-primary-soft btn-locked" type="button" disabled><i class="bi bi-lock"></i> No Vet Available</button>
-                </div>
-              <?php endif; ?>
-            <?php endif; ?>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
-        <div class="product">
-          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
-            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
-          <?php endif; ?>
-          <div class="product-img"><img src="images/joint-support-chews.jpg" alt="Joint Support Chews" loading="lazy">
-          </div>
-          <div class="product-body">
-            <h5>Joint Support Chews</h5>
-            <div class="brand">VetPlus Mobility</div>
-            <div class="price">
-              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 1,275 <small>EGP 1,500</small>' : 'EGP 1,500' ?>
-            </div>
-            <?= productAllergyAlert($petAllergies, ['glucosamine', 'chondroitin', 'chicken flavor'], $petName) ?>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Joint Support Chews"
-                data-brand="VetPlus Mobility"
-                data-price="<?= !empty($vetRecommendation['has_doctor']) ? '1275' : '1500' ?>"
-                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '1500' : '' ?>"
-                data-bg="bg-sand"
-                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>"
-                data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>"
-                data-pts="26"><i class="bi bi-cart-plus"></i> Add to
-                Cart</button></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="treats">
-        <div class="product">
-          <div class="product-img"><img src="images/Chicken-Crunchy-Treats.jpg" alt="Chicken Crunchy Treats"
-              loading="lazy"></div>
-          <div class="product-body">
-            <h5>Chicken Crunchy Treats</h5>
-            <div class="brand">PawSnacks Co.</div>
-            <div class="price">EGP 450</div>
-            <?= productAllergyAlert($petAllergies, ['chicken', 'wheat', 'corn'], $petName) ?>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn"
-                data-name="Chicken Crunchy Treats" data-brand="PawSnacks Co." data-price="450"
-                data-bg="bg-sky" data-badge="warn" data-badge-label="Allergen" data-pts="9"><i class="bi bi-cart-plus"></i> Add to Cart</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="col" data-category="therapeutic-diets auto-ship">
-        <div class="product">
-          <span class="badge-tag badge-sub"><i class="bi bi-arrow-repeat"></i> AUTO-SHIP</span>
-          <div class="product-img"><img src="images/Dry-Food.jpg" alt="Adult Dry Food 1kg" loading="lazy"></div>
-          <div class="product-body">
-            <h5>Adult Dry Food 1kg</h5>
-            <div class="brand">Royal Canin</div>
-            <div class="price">EGP 260</div>
-            <?= productAllergyAlert($petAllergies, ['chicken', 'rice', 'corn', 'wheat'], $petName) ?>
-            <div class="mt-auto pt-3">
-              <button class="btn-primary-soft add-to-cart-btn" data-name="Adult Dry Food 1kg" data-brand="Royal Canin"
-                data-price="260" data-bg="bg-green" data-badge="sub" data-badge-label="AUTO-SHIP"
-                data-auto-ship="1" data-pts="5">
-
-                <i class="bi bi-cart-plus"></i> Subscribe & Save 10%
-              </button>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
-        <div class="product">
-          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
-            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
-          <?php endif; ?>
-          <div class="product-img"><img src="images/Omega-3-Fish-Oil.jpg" alt="Omega-3 Fish Oil" loading="lazy"></div>
-          <div class="product-body">
-            <h5>Omega-3 Fish Oil</h5>
-            <div class="brand">PetWell Naturals</div>
-            <div class="price">
-              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 1,000 <small>EGP 1,200</small>' : 'EGP 1,200' ?>
-            </div>
-            <?= productAllergyAlert($petAllergies, ['fish oil', 'salmon', 'omega 3'], $petName) ?>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Omega-3 Fish Oil"
-                data-brand="PetWell Naturals" data-price="<?= !empty($vetRecommendation['has_doctor']) ? '1000' : '1200' ?>"
-                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '1200' : '' ?>"
-                data-bg="bg-mint"
-                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>" data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>" data-pts="20"
-                data-task-points="180"><i class="bi bi-cart-plus"></i> Add to
-                Cart</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="toys">
-        <div class="product">
-          <div class="product-img"><img src="images/Squeaky-Fetch-Ball.webp" alt="Squeaky Fetch Ball" loading="lazy">
-          </div>
-          <div class="product-body">
-            <h5>Squeaky Fetch Ball</h5>
-            <div class="brand">PlayPaws</div>
-            <div class="price">EGP 325</div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Non-toxic materials</div>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Squeaky Fetch Ball"
-                data-brand="PlayPaws" data-price="325" data-bg="bg-sky" data-badge=""
-                data-badge-label="" data-pts="7"><i class="bi bi-cart-plus"></i> Add to Cart</button></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="hygiene auto-ship">
-        <div class="product">
-          <span class="badge-tag badge-sub"><i class="bi bi-arrow-repeat"></i> AUTO-SHIP</span>
-          <div class="product-img"><img src="images/Oatmeal-Gentle-Shampoo.webp" alt="Oatmeal Gentle Shampoo"
-              loading="lazy"></div>
-          <div class="product-body">
-            <h5>Oatmeal Gentle Shampoo</h5>
-            <div class="brand">CleanCoat</div>
-            <div class="price">EGP 710</div>
-            <?= productAllergyAlert($petAllergies, ['oatmeal', 'aloe', 'fragrance'], $petName) ?>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn"
-                data-name="Oatmeal Gentle Shampoo" data-brand="CleanCoat" data-price="639" data-old="710"
-                data-bg="bg-sand" data-badge="sub" data-badge-label="AUTO-SHIP"
-                data-auto-ship="1" data-pts="13" data-task-points="150">
-                <i class="bi bi-cart-plus"></i> Subscribe & Save 10%</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="supplements<?= !empty($vetRecommendation['has_doctor']) ? ' vet-recommended' : '' ?>">
-        <div class="product">
-          <?php if (!empty($vetRecommendation['has_doctor'])): ?>
-            <span class="badge-tag badge-vet"><i class="bi bi-shield-check"></i> VET PICK -15%</span>
-          <?php endif; ?>
-          <div class="product-img"><img src="images/Dental-Chew-Sticks.jpg" alt="Dental Chew Sticks" loading="lazy">
-          </div>
-          <div class="product-body">
-            <h5>Dental Chew Sticks</h5>
-            <div class="brand">FreshBite</div>
-            <div class="price">
-              <?= !empty($vetRecommendation['has_doctor']) ? 'EGP 540 <small>EGP 600</small>' : 'EGP 600' ?>
-            </div>
-            <?= productAllergyAlert($petAllergies, ['beef', 'wheat', 'mint'], $petName) ?>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Dental Chew Sticks"
-                data-brand="FreshBite" data-price="<?= !empty($vetRecommendation['has_doctor']) ? '540' : '600' ?>"
-                data-old="<?= !empty($vetRecommendation['has_doctor']) ? '600' : '' ?>"
-                data-bg="bg-mint"
-                data-badge="<?= !empty($vetRecommendation['has_doctor']) ? 'vet' : '' ?>" data-badge-label="<?= !empty($vetRecommendation['has_doctor']) ? 'VET -15%' : '' ?>" data-pts="120">
-                <i class="bi bi-cart-plus"></i> Add to
-                Cart</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="hygiene">
-        <div class="product">
-          <div class="product-img"><img src="images/Orthopedic-Memory-Bed.jpg" alt="Orthopedic Memory Bed"
-              loading="lazy"></div>
-          <div class="product-body">
-            <h5>Orthopedic Memory Bed</h5>
-            <div class="brand">CozyPaw</div>
-            <div class="price">EGP 2,700</div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Removable washable cover</div>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Orthopedic Memory Bed"
-                data-brand="CozyPaw" data-price="2700" data-bg="bg-sky" data-badge=""
-                data-badge-label="" data-pts="54"><i class="bi bi-cart-plus"></i> Add to Cart</button></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col" data-category="hygiene auto-ship">
-        <div class="product">
-          <span class="badge-tag badge-sub"><i class="bi bi-arrow-repeat"></i> AUTO-SHIP</span>
-          <div class="product-img"><img src="images/Training-Pads.jpg" alt="Training Pads" loading="lazy"></div>
-          <div class="product-body">
-            <h5>Training Pads (50pk)</h5>
-            <div class="brand">PupClean</div>
-            <div class="price">EGP 900</div>
-            <div class="allergy-safe"><i class="bi bi-check-circle-fill"></i> Fragrance-free</div>
-            <div class="mt-auto pt-3"><button class="btn-primary-soft add-to-cart-btn" data-name="Training Pads (50pk)"
-                data-brand="PupClean" data-price="810" data-old="900" data-bg="bg-green"
-                data-badge="sub" data-badge-label="AUTO-SHIP" data-auto-ship="1" data-pts="120"><i class="bi bi-cart-plus"></i> Subscribe &
-                Save 10%</button></div>
-          </div>
-        </div>
-      </div>
-
+      <?php endforeach; ?>
     </div>
 
     <!-- AUTO-SHIP -->

@@ -506,6 +506,7 @@ class Database
 
         CREATE TABLE IF NOT EXISTS `marketplace_items` (
           `id` int(11) NOT NULL AUTO_INCREMENT,
+          `vendor_id` int(11) DEFAULT NULL,
           `name` varchar(255) NOT NULL,
           `short_description` text DEFAULT NULL,
           `price` decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -798,7 +799,8 @@ class Database
       $this->addColumnIfMissing('vendor_payments', $column, $definition);
     }
 
-    $this->addColumnIfMissing('marketplace_items', 'name', "`name` varchar(255) NOT NULL DEFAULT '' AFTER `id`");
+    $this->addColumnIfMissing('marketplace_items', 'vendor_id', "`vendor_id` int(11) DEFAULT NULL AFTER `id`");
+    $this->addColumnIfMissing('marketplace_items', 'name', "`name` varchar(255) NOT NULL DEFAULT '' AFTER `vendor_id`");
     $this->addColumnIfMissing('marketplace_items', 'short_description', "`short_description` text DEFAULT NULL AFTER `name`");
     $this->addColumnIfMissing('marketplace_items', 'price', "`price` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `short_description`");
     $this->addColumnIfMissing('marketplace_items', 'category', "`category` varchar(100) DEFAULT NULL AFTER `price`");
@@ -1051,76 +1053,28 @@ class Database
       return;
     }
 
+    $vendorId = $this->ensureStaticMarketplaceVendor();
+
     $items = [
-      [
-        'name' => 'Premium Dog Food',
-        'short_description' => 'High-protein blend for active dogs',
-        'price' => 520.00,
-        'category' => 'Food',
-        'image' => 'premium-dog-food.png',
-        'rating' => 4.8,
-        'stock' => 20,
-        'is_recommended' => 1,
-      ],
-      [
-        'name' => 'Squeaky Plush Toy',
-        'short_description' => 'Soft chew-friendly playtime favorite',
-        'price' => 120.00,
-        'category' => 'Toys',
-        'image' => 'squeaky-plush-toy.png',
-        'rating' => 4.6,
-        'stock' => 30,
-        'is_recommended' => 1,
-      ],
-      [
-        'name' => 'Adjustable Pet Collar',
-        'short_description' => 'Comfort fit with premium buckle',
-        'price' => 95.00,
-        'category' => 'Accessories',
-        'image' => 'adjustable-pet-collar.png',
-        'rating' => 4.7,
-        'stock' => 25,
-        'is_recommended' => 1,
-      ],
-      [
-        'name' => 'Soft Cozy Pet Bed',
-        'short_description' => 'Cloud-soft rest spot for naps',
-        'price' => 450.00,
-        'category' => 'Beds',
-        'image' => 'soft-cozy-pet-bed.png',
-        'rating' => 4.9,
-        'stock' => 12,
-        'is_recommended' => 1,
-      ],
-      [
-        'name' => 'Durable Rope Toy',
-        'short_description' => 'Strong braided rope for tug play',
-        'price' => 110.00,
-        'category' => 'Toys',
-        'image' => 'durable-rope-toy.png',
-        'rating' => 4.5,
-        'stock' => 18,
-        'is_recommended' => 1,
-      ],
+      ['name' => 'Renal Care Diet', 'short_description' => 'Vet prescription diet', 'price' => 2400, 'category' => 'therapeutic-diets', 'image' => 'Renal-Care-Diet.jpg', 'rating' => 4.8, 'stock' => 20, 'is_recommended' => 1],
+      ['name' => 'Joint Support Chews', 'short_description' => 'Mobility supplement', 'price' => 1500, 'category' => 'supplements', 'image' => 'joint-support-chews.jpg', 'rating' => 4.8, 'stock' => 20, 'is_recommended' => 1],
+      ['name' => 'Chicken Crunchy Treats', 'short_description' => 'Crunchy pet treats', 'price' => 450, 'category' => 'treats', 'image' => 'Chicken-Crunchy-Treats.jpg', 'rating' => 4.7, 'stock' => 30, 'is_recommended' => 1],
+      ['name' => 'Adult Dry Food 1kg', 'short_description' => 'Daily dry food', 'price' => 260, 'category' => 'therapeutic-diets', 'image' => 'Dry-Food.jpg', 'rating' => 4.6, 'stock' => 25, 'is_recommended' => 1],
+      ['name' => 'Omega-3 Fish Oil', 'short_description' => 'Skin and coat supplement', 'price' => 1200, 'category' => 'supplements', 'image' => 'Omega-3-Fish-Oil.jpg', 'rating' => 4.8, 'stock' => 18, 'is_recommended' => 1],
+      ['name' => 'Squeaky Fetch Ball', 'short_description' => 'Non-toxic play ball', 'price' => 325, 'category' => 'toys', 'image' => 'Squeaky-Fetch-Ball.webp', 'rating' => 4.5, 'stock' => 40, 'is_recommended' => 1],
+      ['name' => 'Oatmeal Gentle Shampoo', 'short_description' => 'Gentle hygiene shampoo', 'price' => 710, 'category' => 'hygiene', 'image' => 'Oatmeal-Gentle-Shampoo.webp', 'rating' => 4.7, 'stock' => 16, 'is_recommended' => 1],
+      ['name' => 'Dental Chew Sticks', 'short_description' => 'Dental care chews', 'price' => 600, 'category' => 'supplements', 'image' => 'Dental-Chew-Sticks.jpg', 'rating' => 4.6, 'stock' => 22, 'is_recommended' => 1],
+      ['name' => 'Orthopedic Memory Bed', 'short_description' => 'Washable orthopedic bed', 'price' => 2700, 'category' => 'hygiene', 'image' => 'Orthopedic-Memory-Bed.jpg', 'rating' => 4.9, 'stock' => 10, 'is_recommended' => 1],
+      ['name' => 'Training Pads (50pk)', 'short_description' => 'Fragrance-free training pads', 'price' => 900, 'category' => 'hygiene', 'image' => 'Training-Pads.jpg', 'rating' => 4.6, 'stock' => 35, 'is_recommended' => 1],
     ];
 
     $insert = $this->connection->prepare("
             INSERT INTO `marketplace_items`
-                (`name`, `short_description`, `price`, `category`, `image`, `rating`, `stock`, `is_recommended`)
+                (`vendor_id`, `name`, `short_description`, `price`, `category`, `image`, `rating`, `stock`, `is_recommended`)
             VALUES
-                (:name, :short_description, :price, :category, :image, :rating, :stock, :is_recommended)
+                (:vendor_id, :name, :short_description, :price, :category, :image, :rating, :stock, :is_recommended)
         ");
-    $update = $this->connection->prepare("
-            UPDATE `marketplace_items`
-            SET `short_description` = :short_description,
-                `price` = :price,
-                `category` = :category,
-                `image` = :image,
-                `rating` = :rating,
-                `stock` = :stock,
-                `is_recommended` = :is_recommended
-            WHERE `id` = :id
-        ");
+
     $check = $this->connection->prepare("SELECT id FROM `marketplace_items` WHERE `name` = ? LIMIT 1");
 
     foreach ($items as $item) {
@@ -1128,20 +1082,11 @@ class Database
       $existingId = $check->fetchColumn();
 
       if ($existingId) {
-        $update->execute([
-          'short_description' => $item['short_description'],
-          'price' => $item['price'],
-          'category' => $item['category'],
-          'image' => $item['image'],
-          'rating' => $item['rating'],
-          'stock' => $item['stock'],
-          'is_recommended' => $item['is_recommended'],
-          'id' => $existingId,
-        ]);
         continue;
       }
 
       $insert->execute([
+        'vendor_id' => $vendorId,
         'name' => $item['name'],
         'short_description' => $item['short_description'],
         'price' => $item['price'],
@@ -1152,5 +1097,38 @@ class Database
         'is_recommended' => $item['is_recommended'],
       ]);
     }
+  }
+
+  private function ensureStaticMarketplaceVendor()
+  {
+    $email = 'marketplace.vendor@pawhubs.local';
+
+    $stmt = $this->connection->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    $userId = (int)$stmt->fetchColumn();
+
+    if (!$userId) {
+      $stmt = $this->connection->prepare("
+      INSERT INTO users (username, email, phone, password, role, status)
+      VALUES ('Marketplace Vendor', ?, '', ?, 'vendor', 'active')
+    ");
+      $stmt->execute([$email, password_hash('vendor123', PASSWORD_DEFAULT)]);
+      $userId = (int)$this->connection->lastInsertId();
+    }
+
+    $stmt = $this->connection->prepare("SELECT id FROM vendors WHERE user_id = ? LIMIT 1");
+    $stmt->execute([$userId]);
+    $vendorId = (int)$stmt->fetchColumn();
+
+    if (!$vendorId) {
+      $stmt = $this->connection->prepare("
+      INSERT INTO vendors (user_id, name, balance, is_active)
+      VALUES (?, 'Marketplace Vendor', 0, 1)
+    ");
+      $stmt->execute([$userId]);
+      $vendorId = (int)$this->connection->lastInsertId();
+    }
+
+    return $vendorId;
   }
 }

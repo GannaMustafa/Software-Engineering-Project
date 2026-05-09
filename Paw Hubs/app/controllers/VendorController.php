@@ -12,8 +12,10 @@ class VendorController extends Controller
         $db = Database::getInstance()->getConnection();
         $user = $this->fetchOne($db, "SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
         $role = $user['role'] ?? ($_SESSION['role'] ?? 'pet_owner');
+        $vendor = $this->fetchOne($db, "SELECT * FROM vendors WHERE user_id = ? LIMIT 1", [$_SESSION['user_id']]);
+        $vendorId = (int)($vendor['id'] ?? 0);
 
-        if (!in_array($role, ['service_provider', 'admin'], true)) {
+        if (!in_array($role, ['vendor', 'admin'], true)) {
             http_response_code(403);
             die("Access denied. Vendor page is available for vendors only.");
         }
@@ -22,7 +24,7 @@ class VendorController extends Controller
         $errors = [];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            [$message, $errors] = $this->handleProductAction($db);
+            [$message, $errors] = $this->handleProductAction($db, $role, $vendorId);
         }
 
         $products = $this->fetchAll(
@@ -30,7 +32,7 @@ class VendorController extends Controller
             "SELECT * FROM marketplace_items ORDER BY created_at DESC, id DESC"
         );
 
-        $this->view('vendor/index', [
+        $this->view('vendor/vendor_index', [
             'products' => $products,
             'message' => $message,
             'errors' => $errors,
@@ -38,8 +40,11 @@ class VendorController extends Controller
         ]);
     }
 
-    private function handleProductAction($db)
+    private function handleProductAction($db, $role, $vendorId)
     {
+        if ($role !== 'admin' && $vendorId <= 0) {
+            return [null, ['Vendor profile was not found.']];
+        }
         $action = $_POST['action'] ?? '';
 
         if ($action === 'delete_product') {
@@ -76,11 +81,12 @@ class VendorController extends Controller
         if ($action === 'add_product') {
             $stmt = $db->prepare("
                 INSERT INTO marketplace_items
-                    (name, short_description, price, category, image, rating, stock, is_recommended)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (vendor_id, name, short_description, price, category, image, rating, stock, is_recommended)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             $stmt->execute([
+                $vendorId,
                 $name,
                 $description,
                 $price,

@@ -174,6 +174,7 @@ class AuthController extends Controller
             'admin' => 'admin/index',
             'vet' => 'clinical/index',
             'service_provider' => 'logistics/index',
+            'vendor' => 'vendor/index',
             'pet_owner' => 'home/index'
         ];
 
