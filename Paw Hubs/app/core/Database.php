@@ -13,18 +13,14 @@ class Database
     $password = "";
 
     try {
-      // 1. الاتصال بـ MySQL بدون تحديد قاعدة بيانات في الأول
       $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
       $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-      // 2. إنشاء قاعدة البيانات لو مش موجودة
       $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
 
-      // 3. الاتصال بقاعدة البيانات المطلوبة فعلياً
       $this->connection = new PDO("mysql:host=$host;dbname=$dbName;charset=utf8mb4", $username, $password);
       $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-      // 4. إنشاء الجداول الأساسية لو مش موجودة (Self-Healing)
       $this->createTables();
       $this->migrateTables();
     } catch (PDOException $e) {

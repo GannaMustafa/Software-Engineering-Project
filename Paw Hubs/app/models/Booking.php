@@ -1,6 +1,6 @@
 <?php
 
-require_once '../app/core/Database.php';
+require_once __DIR__ . '/../core/Database.php';
 
 class Booking
 {
@@ -13,9 +13,8 @@ class Booking
 
     public function create(int $ownerId, int $serviceId, int $petId, string $notes = '', $providerId = null)
     {
-        // Fallback provider_id to avoid NULL error
         if (empty($providerId)) {
-            $providerId = 1; // Change this to a real provider_id if needed
+            $providerId = 1; 
         }
 
         $sql = "INSERT INTO service_bookings 

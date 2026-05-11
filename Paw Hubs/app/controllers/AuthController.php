@@ -11,8 +11,14 @@ class AuthController extends Controller
         $this->authService = new AuthService();
     }
 
+
+
     public function login()
     {
+
+
+
+
         if (isset($_SESSION['user_id'])) {
             $this->refreshSessionUser($_SESSION['user_id']);
             $this->redirectBasedOnRole($_SESSION['role']);
@@ -26,6 +32,15 @@ class AuthController extends Controller
             $user = $this->authService->authenticate($email, $pass);
 
             if ($user) {
+
+                if ($user['status'] === 'suspended') {
+                    $errors[] = "Your account has been suspended by the administrator. Please contact support.";
+
+                    $this->view('auth/login', ['errors' => $errors]);
+                    return;
+                }
+
+
                 session_regenerate_id(true);
                 $_SESSION['user_id']     = $user['id'];
                 $_SESSION['username']    = $user['username'];
