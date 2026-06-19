@@ -660,7 +660,7 @@ if (!function_exists('asset')) {
                     <div>
                         <p class="menu-label">Clinical</p>
                         <nav class="menu">
-                            <a href="index.php?url=clinical/index"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                            <a href="index.php?url=<?= $role === 'vet' ? 'clinical/vetDashboard' : 'clinical/index' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
                             <a class="active" href="index.php?url=clinical/labHub"><i class="fas fa-vial"></i> Lab Hub</a>
                             <?php if ($role === 'vet'): ?>
                                 <a href="index.php?url=clinical/surgeryManager"><i class="fas fa-calendar-check"></i> Surgery Manager</a>

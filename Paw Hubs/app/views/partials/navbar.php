@@ -133,23 +133,12 @@ if (isset($_SESSION['user_id']) && $db) {
             <?php if ($role == 'pet_owner'): ?>
                 <li><a href="<?= htmlspecialchars(app_url('home/index', 'my-pets')) ?>">My Pets</a></li>
                 <li><a href="<?= htmlspecialchars(project_url('Pet Health page/pet-health.php')) ?>" class="<?= nav_active([], ['/Pet Health page/pet-health.php']) ?>">Health</a></li>
-                <li><a href="<?= htmlspecialchars(app_url('clinical/labHub')) ?>" class="<?= nav_active(['clinical/labHub']) ?>">Lab Hub</a></li>
+                <li><a href="<?= htmlspecialchars(app_url('clinical/labHub')) ?>" class="<?= nav_active(['clinical/labHub']) ?>">Clinical</a></li>
             <?php endif; ?>
             <li><a href="<?= htmlspecialchars(project_url('Smart Marketplace Page/smart_marketplace_pet_care.php')) ?>" class="<?= nav_active([], ['/Smart Marketplace Page/smart_marketplace_pet_care.php']) ?>">Marketplace</a></li>
             <li><a href="<?= htmlspecialchars(app_url('service/index')) ?>" class="<?= nav_active(['service/index']) ?>">Services</a></li>
             <li><a href="<?= htmlspecialchars(app_url('reviews/index')) ?>" class="<?= nav_active(['reviews/index']) ?>">Review</a></li>
-            <?php if ($role == 'pet_owner'): ?>
-                <li><a href="<?= htmlspecialchars(app_url('complaints/index')) ?>" class="<?= nav_active(['complaints']) ?>">Complaint</a></li>
-            <?php endif; ?>
-            <?php if (in_array($role, ['admin', 'vet'], true)): ?>
-                <li><a href="<?= htmlspecialchars(app_url('clinical/index')) ?>" class="<?= nav_active(['clinical/index', 'clinical/surgeryManager', 'clinical/referralsWorkflow', 'clinical/resourceManager']) ?>">Clinical</a></li>
-                <li><a href="<?= htmlspecialchars(app_url('clinical/labHub')) ?>" class="<?= nav_active(['clinical/labHub']) ?>">Lab Hub</a></li>
-            <?php endif; ?>
-            <?php if ($role === 'admin'): ?>
-                <li><a href="<?= htmlspecialchars(app_url('admin/index')) ?>" class="<?= nav_active(['admin']) ?>">Admin</a></li>
-                <li><a href="<?= htmlspecialchars(app_url('clinical/resourceManager')) ?>" class="<?= nav_active(['clinical/resourceManager']) ?>">Surgery Manager</a></li>
-                <li><a href="<?= htmlspecialchars(app_url('audit/index')) ?>" class="<?= nav_active(['audit/index']) ?>">Audit Log</a></li>
-            <?php endif; ?>
+            <li><a href="<?= htmlspecialchars(app_url('complaints/index')) ?>" class="<?= nav_active(['complaints']) ?>">Complaint</a></li>
             <li><a href="<?= htmlspecialchars(app_url('about/index')) ?>" class="<?= nav_active(['about/index']) ?>">About</a></li>
         </ul>
 

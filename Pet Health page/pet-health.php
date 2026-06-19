@@ -86,7 +86,7 @@ $role = $_SESSION['role'] ?? 'pet_owner';
 
 $sql = "SELECT p.id, p.name, p.species, p.weight, p.age ,p.gender,p.image
         FROM pets p
-        INNER JOIN pet_owners po ON p.owner_id = po.user_id
+        INNER JOIN pet_owners po ON p.owner_id = po.id
         WHERE po.user_id = ?";
 $stmt = $connect->prepare($sql);
 $stmt->execute([$user_id]);
@@ -463,7 +463,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'log_e
   $currentWeight = floatval($_POST['weight'] ?? 0);
 
   if ($petId > 0 && $currentWeight > 0) {
-    $stmt = $connect->prepare("SELECT weight FROM pets WHERE id = ? AND owner_id = ?");
+    $stmt = $connect->prepare("
+      SELECT p.weight
+      FROM pets p
+      INNER JOIN pet_owners po ON po.id = p.owner_id
+      WHERE p.id = ?
+        AND po.user_id = ?
+    ");
     $stmt->execute([$petId, $user_id]);
     $idealWeightResult = $stmt->fetchColumn();
 
@@ -746,12 +752,24 @@ if ($selected_pet) {
 }
 
 if ($selected_pet && $alert) {
+  $weightAlertMessage = 'Sudden weight ' . ($alert['type'] === 'gain' ? 'gain' : 'loss') . ' detected for ' . ($selected_pet['name'] ?? 'your pet') . ': ' . $alert['value'] . '% in ' . $alert['days'] . ' days (' . $alert['old'] . ' to ' . $alert['new'] . ' kg).';
+
   createUserNotification(
     $connect,
     $user_id,
     'Weight change alert',
-    'Sudden weight ' . ($alert['type'] === 'gain' ? 'gain' : 'loss') . ' detected for ' . ($selected_pet['name'] ?? 'your pet') . ': ' . $alert['value'] . '% in ' . $alert['days'] . ' days (' . $alert['old'] . ' to ' . $alert['new'] . ' kg).',
+    $weightAlertMessage,
     'weight_alert'
+  );
+
+  createVetRequest(
+    $connect,
+    (int) $selected_pet['id'],
+    $user_id,
+    'weight_alert',
+    'Weight change review needed',
+    $weightAlertMessage . ' Vet should review the pet health logs and recommend follow-up if needed.',
+    'urgent'
   );
 }
 

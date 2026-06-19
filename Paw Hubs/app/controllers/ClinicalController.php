@@ -74,6 +74,11 @@ class ClinicalController extends Controller
             exit;
         }
 
+        if ($role === 'vet') {
+            header("Location: index.php?url=clinical/vetDashboard");
+            exit;
+        }
+
         $db = Database::getInstance()->getConnection();
         $this->ensureLabHubSchema($db);
         $this->ensureSurgeryRequestSchema($db);
@@ -140,6 +145,65 @@ class ClinicalController extends Controller
             'specialists' => $this->specialists($db),
             'operatingRooms' => $role === 'vet' ? $this->availableOperatingRooms($db) : [],
             'equipment' => $role === 'vet' ? $this->availableSurgicalEquipment($db) : [],
+            'message' => $message,
+            'errors' => $errors
+        ]);
+    }
+
+    public function vetDashboard()
+    {
+        if (!isset($_SESSION['user_id'])) {
+            header("Location: index.php?url=auth/login");
+            exit;
+        }
+
+        $role = $_SESSION['role'] ?? 'pet_owner';
+        if ($role !== 'vet') {
+            if ($role === 'admin') {
+                header("Location: index.php?url=admin/clinical");
+                exit;
+            }
+            header("Location: index.php?url=home/index");
+            exit;
+        }
+
+        $db = Database::getInstance()->getConnection();
+        $this->ensureLabHubSchema($db);
+        $this->ensureSurgeryRequestSchema($db);
+        $userId = (int) $_SESSION['user_id'];
+        $vet = $this->fetchOne($db, "SELECT id FROM veterinarians WHERE user_id = ?", [$userId]);
+        $vetId = (int) ($vet['id'] ?? 0);
+
+        $message = null;
+        $errors = [];
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            if ($action === 'resolve_vet_request') {
+                [$message, $errors] = $this->handleVetRequestResolution($db, $vetId);
+            } elseif ($action === 'add_request_health_record') {
+                [$message, $errors] = $this->handleRequestHealthRecord($db, $vetId);
+            }
+        }
+
+        $procedures = $this->procedures($db, $vetId);
+        $labReports = $this->labReports($db, $vetId);
+        $referrals = $this->referrals($db, $vetId);
+        $workflowRequests = $this->vetWorkflowRequests($db, $vetId);
+        $vetRequests = $this->vetRequests($db, $vetId);
+
+        $this->view('clinical/vet_dashboard', [
+            'role' => $role,
+            'stats' => [
+                'procedures' => count($procedures),
+                'lab_reports' => count($labReports),
+                'referrals' => count($referrals),
+                'vet_requests' => count($vetRequests),
+                'pending_owner' => count(array_filter($workflowRequests, fn($request) => strtolower($request['owner_status'] ?? '') === 'pending')),
+                'pending_admin' => count(array_filter($workflowRequests, fn($request) => strtolower($request['admin_status'] ?? '') === 'pending'))
+            ],
+            'workflowRequests' => $workflowRequests,
+            'vetRequests' => $vetRequests,
+            'incomingLabStats' => $this->incomingLabStats($labReports),
             'message' => $message,
             'errors' => $errors
         ]);
@@ -1901,11 +1965,10 @@ class ClinicalController extends Controller
         $row = $this->fetchOne(
             $db,
             "SELECT id
-         FROM medical_procedures
-         WHERE pet_id = ?
-           AND vet_id = ?
+         FROM pets
+         WHERE id = ?
          LIMIT 1",
-            [$petId, $vetId]
+            [$petId]
         );
 
         return !empty($row);
@@ -1913,31 +1976,19 @@ class ClinicalController extends Controller
 
     private function vetRequests($db, $vetId)
     {
-        $vetFilter = $vetId
-            ? "AND EXISTS (
-            SELECT 1
-            FROM medical_procedures mp
-            WHERE mp.pet_id = vr.pet_id
-              AND mp.vet_id = ?
-        )"
-            : "";
-
-        $params = $vetId ? [$vetId] : [];
-
         return $this->fetchAll(
             $db,
             "SELECT vr.*, p.name AS pet_name, p.species, u.username AS owner_name
          FROM vet_requests vr
          LEFT JOIN pets p ON p.id = vr.pet_id
          LEFT JOIN users u ON u.id = vr.owner_user_id
-         WHERE vr.status = 'pending'
-           $vetFilter
+         WHERE LOWER(COALESCE(vr.status, 'pending')) = 'pending'
          ORDER BY
            CASE WHEN vr.priority = 'urgent' THEN 0 ELSE 1 END,
            vr.created_at DESC,
            vr.id DESC
          LIMIT 10",
-            $params
+            []
         );
     }
 

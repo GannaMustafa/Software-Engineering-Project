@@ -20,7 +20,7 @@ class HomeController extends Controller {
         }
 
         if ($role === 'vet') {
-            header("Location: index.php?url=clinical/index");
+            header("Location: index.php?url=clinical/vetDashboard");
             exit;
         }
 

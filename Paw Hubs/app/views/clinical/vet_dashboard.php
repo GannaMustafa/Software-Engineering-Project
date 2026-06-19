@@ -480,7 +480,7 @@
             <div>
                 <p class="menu-label">Clinical</p>
                 <nav class="menu">
-                    <a class="active" href="index.php?url=clinical/index"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                    <a class="active" href="index.php?url=clinical/vetDashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
                     <a href="index.php?url=clinical/surgeryManager"><i class="fas fa-briefcase-medical"></i> Surgery Manager</a>
                     <a href="index.php?url=clinical/labHub"><i class="fas fa-vial-circle-check"></i> Lab Hub</a>
                     <a href="index.php?url=clinical/referralsWorkflow"><i class="fas fa-share-nodes"></i> Referrals Workflow</a>

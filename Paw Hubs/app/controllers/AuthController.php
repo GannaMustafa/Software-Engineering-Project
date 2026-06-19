@@ -172,7 +172,7 @@ class AuthController extends Controller
     {
         $routes = [
             'admin' => 'admin/index',
-            'vet' => 'clinical/index',
+            'vet' => 'clinical/vetDashboard',
             'service_provider' => 'logistics/index',
             'vendor' => 'vendor/index',
             'pet_owner' => 'home/index'
