@@ -13,6 +13,7 @@
   }
 
   body {
+    cursor: url('../Paw Hubs/public/images/icons8-dog-paw-34.png'), auto;
     margin: 0;
     background: #f5faf8;
   }
@@ -474,7 +475,7 @@
     transition: .2s;
   }
 
-  .product .btn-primary-soft{
+  .product .btn-primary-soft {
     width: 100%;
   }
 

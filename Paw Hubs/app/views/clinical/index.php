@@ -30,6 +30,7 @@
         }
 
         body {
+            cursor: url('../public/images/icons8-dog-paw-34.png'), auto;
             margin: 0;
             font-family: 'Outfit', sans-serif;
             background: linear-gradient(135deg, var(--mint), #ffffff 44%, var(--sky));

@@ -25,6 +25,7 @@
 
 body {
 
+    cursor: url('../Paw Hubs/public/images/icons8-dog-paw-34.png'), auto;
     background: var(--bg);
     color: var(--ink);
     overflow-x: hidden;
@@ -855,11 +856,11 @@ h6 {
         left: 12mm !important;
         top: 12mm !important;
         width: calc(100% - 24mm) !important;
-        
-        height: 273mm !important; 
+
+        height: 273mm !important;
         max-height: 273mm !important;
         overflow: hidden !important;
-        
+
         display: block !important;
         background: #fff !important;
         color: #1f2a36 !important;

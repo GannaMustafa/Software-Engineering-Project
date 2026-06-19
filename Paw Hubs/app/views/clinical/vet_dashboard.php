@@ -27,6 +27,7 @@
         }
 
         body {
+            cursor: url('../public/images/icons8-dog-paw-34.png'), auto;
             margin: 0;
             min-height: 100vh;
             padding: 34px;

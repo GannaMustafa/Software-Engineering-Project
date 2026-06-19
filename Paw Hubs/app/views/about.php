@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,8 +19,12 @@
             --line: #d8ebe5;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
+
         body {
+            cursor: url('../public/images/icons8-dog-paw-34.png'), auto;
             margin: 0;
             font-family: 'Outfit', sans-serif;
             color: var(--ink);
@@ -59,7 +64,7 @@
             pointer-events: none;
         }
 
-        .hero-card > * {
+        .hero-card>* {
             position: relative;
             z-index: 2;
         }
@@ -248,6 +253,7 @@
         }
 
         @media (max-width: 980px) {
+
             .hero-card,
             .stats-grid,
             .feature-list {
@@ -256,133 +262,143 @@
         }
 
         @media (max-width: 680px) {
-            .page-shell { padding: 20px 18px 30px; }
-            .hero-card { padding: 28px 24px; }
-            .hero-copy h1 { font-size: 34px; }
+            .page-shell {
+                padding: 20px 18px 30px;
+            }
+
+            .hero-card {
+                padding: 28px 24px;
+            }
+
+            .hero-copy h1 {
+                font-size: 34px;
+            }
         }
     </style>
 </head>
+
 <body>
 
-<?php require_once '../app/views/partials/navbar.php'; ?>
+    <?php require_once '../app/views/partials/navbar.php'; ?>
 
-<?php
-$stats = isset($stats) && is_array($stats) ? $stats : [];
-$ordersTotal = $stats['orders_total'] ?? 0;
-$ordersSuccess = $stats['orders_success'] ?? 0;
-$doctorRating = $stats['doctor_rating'] ?? null;
-$serviceRating = $stats['service_rating'] ?? null;
-$activeUsers = $stats['active_users'] ?? 0;
-?>
+    <?php
+    $stats = isset($stats) && is_array($stats) ? $stats : [];
+    $ordersTotal = $stats['orders_total'] ?? 0;
+    $ordersSuccess = $stats['orders_success'] ?? 0;
+    $doctorRating = $stats['doctor_rating'] ?? null;
+    $serviceRating = $stats['service_rating'] ?? null;
+    $activeUsers = $stats['active_users'] ?? 0;
+    ?>
 
-<main class="page-shell">
-    <section class="hero-card" style="background-image: url('images/AboutUs.png');">
-        <div class="hero-copy">
-            <h1>About Paw Hubs</h1>
-            <p>Paw Hubs brings pet owners, veterinarians, and trusted service providers together in one friendly platform. We help you manage pet health, book appointments, buy products, and discover local services all from one dashboard.</p>
+    <main class="page-shell">
+        <section class="hero-card" style="background-image: url('images/AboutUs.png');">
+            <div class="hero-copy">
+                <h1>About Paw Hubs</h1>
+                <p>Paw Hubs brings pet owners, veterinarians, and trusted service providers together in one friendly platform. We help you manage pet health, book appointments, buy products, and discover local services all from one dashboard.</p>
 
-            <ul>
-                <li>Easy appointment booking with vets and clinics.</li>
-                <li>Marketplace shopping for premium pet products.</li>
-                <li>Service provider reviews and service booking for grooming, walking, and care.</li>
-                <li>Secure user accounts with personalized pet health tracking.</li>
-            </ul>
+                <ul>
+                    <li>Easy appointment booking with vets and clinics.</li>
+                    <li>Marketplace shopping for premium pet products.</li>
+                    <li>Service provider reviews and service booking for grooming, walking, and care.</li>
+                    <li>Secure user accounts with personalized pet health tracking.</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="stats-grid" aria-label="Site statistics">
+            <article class="stat-card">
+                <h3>Total active users</h3>
+                <strong><?= htmlspecialchars((string) $activeUsers) ?></strong>
+                <span>Registered pet owners and service partners.</span>
+            </article>
+            <article class="stat-card">
+                <h3>Marketplace orders</h3>
+                <strong><?= htmlspecialchars((string) $ordersTotal) ?></strong>
+                <span>Orders processed through the platform.</span>
+            </article>
+            <article class="stat-card">
+                <h3>Successful marketplace purchases</h3>
+                <strong><?= htmlspecialchars((string) $ordersSuccess) ?></strong>
+                <span>Confirmed completed orders.</span>
+            </article>
+            <article class="stat-card">
+                <h3>Doctor rating</h3>
+                <strong><?= htmlspecialchars($doctorRating !== null ? $doctorRating : 'N/A') ?></strong>
+                <span>Average score from vet reviews.</span>
+            </article>
+            <article class="stat-card">
+                <h3>Service provider rating</h3>
+                <strong><?= htmlspecialchars($serviceRating !== null ? $serviceRating : 'N/A') ?></strong>
+                <span>Average score from service reviews.</span>
+            </article>
         </div>
-    </section>
 
-    <div class="stats-grid" aria-label="Site statistics">
-        <article class="stat-card">
-            <h3>Total active users</h3>
-            <strong><?= htmlspecialchars((string) $activeUsers) ?></strong>
-            <span>Registered pet owners and service partners.</span>
-        </article>
-        <article class="stat-card">
-            <h3>Marketplace orders</h3>
-            <strong><?= htmlspecialchars((string) $ordersTotal) ?></strong>
-            <span>Orders processed through the platform.</span>
-        </article>
-        <article class="stat-card">
-            <h3>Successful marketplace purchases</h3>
-            <strong><?= htmlspecialchars((string) $ordersSuccess) ?></strong>
-            <span>Confirmed completed orders.</span>
-        </article>
-        <article class="stat-card">
-            <h3>Doctor rating</h3>
-            <strong><?= htmlspecialchars($doctorRating !== null ? $doctorRating : 'N/A') ?></strong>
-            <span>Average score from vet reviews.</span>
-        </article>
-        <article class="stat-card">
-            <h3>Service provider rating</h3>
-            <strong><?= htmlspecialchars($serviceRating !== null ? $serviceRating : 'N/A') ?></strong>
-            <span>Average score from service reviews.</span>
-        </article>
-    </div>
+        <div class="section-title">
+            <h2>What our customers say</h2>
+            <p>Real feedback from pet owners and service providers who trust Paw Hubs.</p>
+        </div>
 
-    <div class="section-title">
-        <h2>What our customers say</h2>
-        <p>Real feedback from pet owners and service providers who trust Paw Hubs.</p>
-    </div>
+        <div class="reviews-grid" aria-label="Customer testimonials">
+            <?php
+            $reviews = $stats['reviews'] ?? [];
+            if (empty($reviews)):
+            ?>
+                <article class="review-card" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <p style="color: var(--muted); margin: 0;">No testimonials available yet. Start using Paw Hubs and share your experience!</p>
+                </article>
+                <?php
+            else:
+                foreach ($reviews as $review):
+                    $rating = (int)($review['rating'] ?? 0);
+                    $stars = str_repeat('★', $rating) . str_repeat('☆', 5 - $rating);
+                ?>
+                    <article class="review-card">
+                        <div class="review-header">
+                            <div class="review-user">
+                                <h4><?= htmlspecialchars($review['owner_name'] ?? 'Anonymous') ?></h4>
+                                <p class="review-service"><?= htmlspecialchars($review['service_name'] ?? 'Paw Hubs Service') ?></p>
+                            </div>
+                            <div class="review-rating">
+                                <span class="stars"><?= $stars ?></span>
+                                <span class="rating-number"><?= $rating ?></span>
+                            </div>
+                        </div>
+                        <?php if (!empty($review['comment'])): ?>
+                            <p class="review-text"><?= htmlspecialchars($review['comment']) ?></p>
+                        <?php endif; ?>
+                    </article>
+            <?php
+                endforeach;
+            endif;
+            ?>
+        </div>
 
-    <div class="reviews-grid" aria-label="Customer testimonials">
-        <?php 
-        $reviews = $stats['reviews'] ?? [];
-        if (empty($reviews)): 
-        ?>
-            <article class="review-card" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-                <p style="color: var(--muted); margin: 0;">No testimonials available yet. Start using Paw Hubs and share your experience!</p>
+        <div class="section-title">
+            <h2>What we do best</h2>
+            <p>Paw Hubs is built to help every pet-loving family feel confident about care, health, and trusted service. Our platform grows as your pets grow.</p>
+        </div>
+
+        <div class="feature-list">
+            <article class="feature-card">
+                <h3>Trusted marketplace</h3>
+                <p>From food to toys, every marketplace order is tracked and presented with clear product details and status information.</p>
             </article>
-        <?php 
-        else:
-            foreach ($reviews as $review): 
-                $rating = (int)($review['rating'] ?? 0);
-                $stars = str_repeat('★', $rating) . str_repeat('☆', 5 - $rating);
-        ?>
-            <article class="review-card">
-                <div class="review-header">
-                    <div class="review-user">
-                        <h4><?= htmlspecialchars($review['owner_name'] ?? 'Anonymous') ?></h4>
-                        <p class="review-service"><?= htmlspecialchars($review['service_name'] ?? 'Paw Hubs Service') ?></p>
-                    </div>
-                    <div class="review-rating">
-                        <span class="stars"><?= $stars ?></span>
-                        <span class="rating-number"><?= $rating ?></span>
-                    </div>
-                </div>
-                <?php if (!empty($review['comment'])): ?>
-                    <p class="review-text"><?= htmlspecialchars($review['comment']) ?></p>
-                <?php endif; ?>
+            <article class="feature-card">
+                <h3>Veterinarian support</h3>
+                <p>Book appointments with vets, keep medical records updated, and get expert care guidance for dogs and cats.</p>
             </article>
-        <?php 
-            endforeach;
-        endif; 
-        ?>
-    </div>
+            <article class="feature-card">
+                <h3>Service providers</h3>
+                <p>Find and rate local pet sitters, groomers, and trainers so others can choose trusted providers.</p>
+            </article>
+            <article class="feature-card">
+                <h3>Pet-friendly community</h3>
+                <p>A clean interface and clear statistics make Paw Hubs easy to use for both new pet owners and long-time caretakers.</p>
+            </article>
+        </div>
+    </main>
 
-    <div class="section-title">
-        <h2>What we do best</h2>
-        <p>Paw Hubs is built to help every pet-loving family feel confident about care, health, and trusted service. Our platform grows as your pets grow.</p>
-    </div>
-
-    <div class="feature-list">
-        <article class="feature-card">
-            <h3>Trusted marketplace</h3>
-            <p>From food to toys, every marketplace order is tracked and presented with clear product details and status information.</p>
-        </article>
-        <article class="feature-card">
-            <h3>Veterinarian support</h3>
-            <p>Book appointments with vets, keep medical records updated, and get expert care guidance for dogs and cats.</p>
-        </article>
-        <article class="feature-card">
-            <h3>Service providers</h3>
-            <p>Find and rate local pet sitters, groomers, and trainers so others can choose trusted providers.</p>
-        </article>
-        <article class="feature-card">
-            <h3>Pet-friendly community</h3>
-            <p>A clean interface and clear statistics make Paw Hubs easy to use for both new pet owners and long-time caretakers.</p>
-        </article>
-    </div>
-</main>
-
-<?php require_once '../app/views/partials/footer.php'; ?>
+    <?php require_once '../app/views/partials/footer.php'; ?>
 </body>
+
 </html>

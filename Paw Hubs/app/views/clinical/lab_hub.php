@@ -39,6 +39,7 @@ if (!function_exists('asset')) {
         }
 
         body {
+            cursor: url('../public/images/icons8-dog-paw-34.png'), auto;
             font-family: 'Outfit', sans-serif;
 
         }
@@ -656,27 +657,27 @@ if (!function_exists('asset')) {
         <div class="app-frame">
             <aside class="sidebar">
 
-                    <div class="brand"><i class="fas fa-vial-circle-check"></i><span>Paw Clinical</span></div>
-                    <div>
-                        <p class="menu-label">Clinical</p>
+                <div class="brand"><i class="fas fa-vial-circle-check"></i><span>Paw Clinical</span></div>
+                <div>
+                    <p class="menu-label">Clinical</p>
+                    <nav class="menu">
+                        <a href="index.php?url=<?= $role === 'vet' ? 'clinical/vetDashboard' : 'clinical/index' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
+                        <a class="active" href="index.php?url=clinical/labHub"><i class="fas fa-vial"></i> Lab Hub</a>
+                        <?php if ($role === 'vet'): ?>
+                            <a href="index.php?url=clinical/surgeryManager"><i class="fas fa-calendar-check"></i> Surgery Manager</a>
+                            <a href="index.php?url=clinical/referralsWorkflow"><i class="fas fa-share-nodes"></i> Referrals Workflow</a>
+                        <?php endif; ?>
+                        <?php if ($role === 'pet_owner'): ?>
+                            <a href="/Pet Health page/pet-health.php"><i class="fas fa-paw"></i> Pet Medical Record</a>
+                        <?php endif; ?>
+                    </nav>
+                </div>
+                <?php if ($role === 'vet'): ?>
+                    <div class="sidebar-footer">
                         <nav class="menu">
-                            <a href="index.php?url=<?= $role === 'vet' ? 'clinical/vetDashboard' : 'clinical/index' ?>"><i class="fas fa-chart-pie"></i> Dashboard</a>
-                            <a class="active" href="index.php?url=clinical/labHub"><i class="fas fa-vial"></i> Lab Hub</a>
-                            <?php if ($role === 'vet'): ?>
-                                <a href="index.php?url=clinical/surgeryManager"><i class="fas fa-calendar-check"></i> Surgery Manager</a>
-                                <a href="index.php?url=clinical/referralsWorkflow"><i class="fas fa-share-nodes"></i> Referrals Workflow</a>
-                            <?php endif; ?>
-                            <?php if ($role === 'pet_owner'): ?>
-                                <a href="/Pet Health page/pet-health.php"><i class="fas fa-paw"></i> Pet Medical Record</a>
-                            <?php endif; ?>
+                            <a href="index.php?url=auth/logout"><i class="fas fa-arrow-right-from-bracket"></i> Logout</a>
                         </nav>
-                    </div>
-                    <?php if ($role === 'vet'): ?>
-                        <div class="sidebar-footer">
-                            <nav class="menu">
-                                <a href="index.php?url=auth/logout"><i class="fas fa-arrow-right-from-bracket"></i> Logout</a>
-                            </nav>
-                        </div><?php endif; ?>
+                    </div><?php endif; ?>
             </aside>
 
             <main class="content">
