@@ -19,7 +19,6 @@ class KYCController
 
         $list = $this->service->getAll($status, $search);
 
-        // Add fake documents for display
         foreach ($list as &$item) {
             $item['docs'] = ($item['role'] === 'vet' || $item['user_role'] === 'vet') 
                 ? ['National ID', 'Medical License', 'University Certificate']

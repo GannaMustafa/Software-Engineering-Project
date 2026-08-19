@@ -128,7 +128,7 @@ $profile   = $data['profile'];
 <div class="modal-overlay open">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <h3>User Profile #<?= $profile['id'] ?></h3>
+      <h3>Pet Owner Profile #<?= $profile['id'] ?></h3>
       <a href="user-management.php" class="modal-close">&times;</a>
     </div>
 
@@ -137,20 +137,24 @@ $profile   = $data['profile'];
       <div class="profile-meta">
         <div class="name"><?= htmlspecialchars($profile['username']) ?></div>
         <div class="email"><?= htmlspecialchars($profile['email']) ?></div>
+        <div><?= htmlspecialchars($profile['phone'] ?? 'No phone') ?></div>
       </div>
     </div>
 
     <!-- Bookings Section -->
     <div style="margin:20px 0; padding:15px; background:#f8f9fa; border-radius:12px;">
-      <h4 style="margin:0 0 12px 0;">Service Bookings</h4>
+      <h4 style="margin:0 0 12px 0;">Recent Bookings</h4>
       <?php if (empty($profile['bookings'])): ?>
         <p style="color:#888; font-style:italic;">No bookings yet.</p>
       <?php else: ?>
         <?php foreach ($profile['bookings'] as $b): ?>
           <div style="background:white; padding:12px; margin-bottom:8px; border-radius:8px; border:1px solid #eee;">
-            <strong><?= htmlspecialchars($b['service_name']) ?></strong><br>
-            <small>Pet: <?= htmlspecialchars($b['pet_name'] ?? 'N/A') ?> | 
-                   Status: <strong><?= ucfirst(htmlspecialchars($b['status'])) ?></strong></small>
+            <strong><?= htmlspecialchars($b['service_name'] ?? 'Service') ?></strong><br>
+            <small>
+              Pet: <?= htmlspecialchars($b['pet_name'] ?? 'N/A') ?> | 
+              Status: <strong><?= ucfirst(htmlspecialchars($b['status'] ?? 'scheduled')) ?></strong><br>
+              <?= date('M j, Y', strtotime($b['booked_at'])) ?>
+            </small>
           </div>
         <?php endforeach; ?>
       <?php endif; ?>
@@ -158,10 +162,11 @@ $profile   = $data['profile'];
 
     <div class="form-actions">
       <a href="user-management.php" class="btn-secondary">Close</a>
+      
       <form method="POST" style="display:inline;">
         <input type="hidden" name="user_id" value="<?= $profile['id'] ?>">
         <button type="submit" name="action" value="<?= ($profile['status'] ?? 'active') === 'active' ? 'suspend' : 'unsuspend' ?>" 
-          class="btn-primary">
+          class="btn-primary" style="<?= ($profile['status'] ?? 'active') === 'active' ? 'background:var(--danger)' : '' ?>">
           <?= ($profile['status'] ?? 'active') === 'active' ? 'Suspend User' : 'Unsuspend User' ?>
         </button>
       </form>

@@ -39,7 +39,6 @@ class ProviderController
 
         $message = $this->service->handleAction($action, $id, $_POST);
 
-        // Redirect to prevent resubmit on refresh
         header("Location: provider-management.php?message=" . urlencode($message) . 
                (isset($_GET['search']) ? '&search=' . urlencode($_GET['search']) : '') .
                (isset($_GET['status']) ? '&status=' . urlencode($_GET['status']) : '') .

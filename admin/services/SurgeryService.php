@@ -11,42 +11,39 @@ class SurgeryService
         $this->model = new SurgeryModel();
     }
 
-    public function getAll()
-    {
-        return $this->model->getAllSurgeries();
-    }
-
-    public function filter($search, $status)
-    {
-        return $this->model->searchAndFilter($search, $status);
-    }
-
-    public function getById($id)
-    {
-        return $this->model->getById($id);
-    }
+    public function getAll() { return $this->model->getAllSurgeries(); }
+    public function filter($search, $status) { return $this->model->searchAndFilter($search, $status); }
+    public function getById($id) { return $this->model->getById($id); }
 
     public function handleAction($action, $id, $data = [])
     {
         if ($action === 'approve') {
-            $data['status'] = 'approved';
-            $this->model->saveSurgery($data);
-            return "Surgery #$id approved and scheduled.";
+            return $this->model->approveSurgery(
+                $id,
+                $data['scheduled_date'] ?? null,
+                $data['room'] ?? '',
+                $data['scheduled_time'] ?? ''
+            ) ? "Surgery #$id has been approved and scheduled." : "Failed to approve surgery.";
         }
+
+        if ($action === 'reschedule') {
+            return $this->model->rescheduleSurgery(
+                $id,
+                $data['scheduled_date'] ?? null,
+                $data['room'] ?? '',
+                $data['scheduled_time'] ?? '',
+                $data['reschedule_reason'] ?? 'Rescheduled by admin'
+            ) ? "Surgery #$id has been rescheduled." : "Failed to reschedule surgery.";
+        }
+
         if ($action === 'reject') {
-            $data['status'] = 'rejected';
-            $this->model->saveSurgery($data);
-            return "Surgery request #$id rejected.";
+            return $this->model->updateStatus($id, 'rejected') ? "Surgery request rejected." : "Failed.";
         }
+
         if ($action === 'complete') {
-            $data['status'] = 'completed';
-            $this->model->saveSurgery($data);
-            return "Surgery #$id marked as completed.";
+            return $this->model->updateStatus($id, 'completed') ? "Surgery marked as completed." : "Failed.";
         }
-        if ($action === 'delete') {
-            $this->model->deleteSurgery($id);
-            return "Surgery #$id deleted permanently.";
-        }
-        return '';
+
+        return 'Unknown action';
     }
 }

@@ -27,7 +27,7 @@ class SystemService
 
         switch ($action) {
             case 'unsuspend':
-                $stmt = $this->model->db->prepare("UPDATE users SET status = 'active' WHERE id = ?");
+                $stmt = $this->model->$this->db->prepare("UPDATE users SET status = 'active' WHERE id = ?");
                 $stmt->execute([$id]);
                 return "Account #$id has been unsuspended.";
 

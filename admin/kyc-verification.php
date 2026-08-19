@@ -200,7 +200,6 @@ $doc_view = $data['view'];
     <div class="section-divider">Submitted Documents</div>
     <div style="padding:10px 0;">
       <?php 
-        // Fake documents for display (since we don't store actual files yet)
         $fake_docs = ($doc_view['role'] === 'vet' || ($doc_view['user_role'] ?? '') === 'vet') 
           ? ['National ID', 'Medical License', 'University Certificate']
           : ['Business License', 'Owner ID', 'Tax Certificate'];

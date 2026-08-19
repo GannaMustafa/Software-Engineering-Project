@@ -27,21 +27,23 @@ class SurgeryController
 
     public function postAction()
     {
-        $message = '';
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return '';
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $action = $_POST['action'] ?? '';
-            $id     = (int)($_POST['surgery_id'] ?? 0);
+        $action = $_POST['action'] ?? '';
+        $id     = (int)($_POST['surgery_id'] ?? 0);
 
-            $data = [
-                'id'              => $id,
-                'procedure_date'  => $_POST['scheduled_date'] ?? null,
-                'notes'           => "Room: " . ($_POST['room'] ?? '') . " | Time: " . ($_POST['scheduled_time'] ?? '')
-            ];
+        $data = [
+            'scheduled_date'    => $_POST['scheduled_date'] ?? null,
+            'scheduled_time'    => $_POST['scheduled_time'] ?? '',
+            'room'              => $_POST['room'] ?? '',
+            'reschedule_reason' => $_POST['reschedule_reason'] ?? 'Rescheduled by administrator'
+        ];
 
-            $message = $this->service->handleAction($action, $id, $data);
-        }
+        $message = $this->service->handleAction($action, $id, $data);
 
-        return $message;
+        header("Location: surgery-management.php?message=" . urlencode($message) .
+               (isset($_GET['search']) ? '&search=' . urlencode($_GET['search']) : '') .
+               (isset($_GET['status']) ? '&status=' . urlencode($_GET['status']) : ''));
+        exit;
     }
 }

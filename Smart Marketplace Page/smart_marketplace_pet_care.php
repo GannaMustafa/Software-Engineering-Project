@@ -13,6 +13,26 @@ if (!function_exists('asset')) {
   }
 }
 
+if (isset($_SESSION['user_id'])) {
+  require_once $pawHubsPath . '/app/core/Database.php';
+  try {
+    $pdo = Database::getInstance()->getConnection();
+    $stmt = $pdo->prepare("SELECT status FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$_SESSION['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($user && $user['status'] === 'suspended') {
+      session_unset();
+      session_destroy();
+      $_SESSION['suspend_msg'] = "Your account has been suspended by the administrator. Please contact support.";
+      header("Location: ../Paw Hubs/public/index.php?url=auth/login&suspended=1");
+      exit;
+    }
+  } catch (Exception $e) {
+    error_log("Suspension check failed: " . $e->getMessage());
+  }
+}
+
 function createMarketplaceNotification(PDO $db, int $userId, string $title, string $message, string $type): void
 {
   if (!$userId) {

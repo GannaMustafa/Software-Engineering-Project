@@ -123,7 +123,7 @@ $pageTitle = $pageTitle ?? 'Reviews';
         .field select,
         .field textarea {
             width: 100%;
-            padding: 14px 18px;
+            padding: 15px 18px;
             border: 1px solid #dfe7e4;
             border-radius: 16px;
             font-size: 1rem;
@@ -133,6 +133,7 @@ $pageTitle = $pageTitle ?? 'Reviews';
         .field textarea {
             min-height: 140px;
             resize: vertical;
+            margin-left: -14px;
         }
 
         .btn-submit {
@@ -255,6 +256,7 @@ $pageTitle = $pageTitle ?? 'Reviews';
 
                     <div class="field">
                         <label for="comment">Comment</label>
+                        
                         <textarea id="comment" name="comment" rows="6" required placeholder="Write your review here..."></textarea>
                     </div>
 

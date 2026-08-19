@@ -10,8 +10,7 @@ class ProviderModel
     {
         $this->db = Database::getInstance()->getConnection();
     }
-
-    public function getAllProviders()
+    public function getAllProviders()   
     {
         $sql = "
             SELECT * FROM (
@@ -33,14 +32,14 @@ class ProviderModel
                 
                 UNION ALL
                 
-                SELECT ven.id, ven.name, '' as email, '' as phone, 'vendor' as role, 
-                       IF(ven.is_active = 1, 'active', 'suspended') as status, 'approved' as kyc,
+                SELECT ven.id, u.username as name, u.email, u.phone, 'vendor' as role, 
+                       IF(ven.is_active=1,'active','suspended') as status, 'approved' as kyc,
                        0 as rating, ven.balance as earnings
                 FROM vendors ven
+                LEFT JOIN users u ON ven.user_id = u.id
             ) as all_providers
             ORDER BY name ASC
         ";
-
         $stmt = $this->db->query($sql);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -122,6 +121,33 @@ class ProviderModel
         }
 
         $stmt = $this->db->prepare("
+            SELECT ven.id, COALESCE(u.username, ven.name) as name, u.email, u.phone, 
+                   'vendor' as role, IF(ven.is_active=1,'active','suspended') as status, 
+                   'approved' as kyc, ven.balance as earnings
+            FROM vendors ven
+            LEFT JOIN users u ON ven.user_id = u.id
+            WHERE ven.id = ?
+        ");
+        $stmt->execute([$id]);
+        $data = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($data) return $data;
+
+       $stmt = $this->db->prepare("
+            SELECT v.id, u.username as name, u.email, u.phone, 'vet' as role, 
+                   COALESCE(u.status,'active') as status, COALESCE(k.status,'approved') as kyc
+            FROM veterinarians v 
+            JOIN users u ON v.user_id = u.id 
+            LEFT JOIN kyc_verifications k ON k.user_id = u.id 
+            WHERE v.id = ?
+        ");
+        $stmt->execute([$id]);
+        $data = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($data) {
+            $data['services'] = ['General Veterinary Services'];
+            return $data;
+        }
+
+        $stmt = $this->db->prepare("
             SELECT sp.id, u.username as name, u.email, u.phone, 'provider' as role, 
                    COALESCE(u.status,'active') as status, COALESCE(k.status,'approved') as kyc,
                    COALESCE(sp.rating, 0) as rating
@@ -147,27 +173,29 @@ class ProviderModel
             $hashed = password_hash($password, PASSWORD_DEFAULT);
             $user_id = null;
 
-            if ($role !== 'vendor') {
-                $stmt = $this->db->prepare("
-                    INSERT INTO users (username, email, phone, password, role, status) 
-                    VALUES (?, ?, ?, ?, ?, 'active')
-                ");
-                $stmt->execute([$name, $email, $phone, $hashed, $role]);
-                $user_id = $this->db->lastInsertId();
-            }
+            $stmt = $this->db->prepare("
+                INSERT INTO users (username, email, phone, password, role, status) 
+                VALUES (?, ?, ?, ?, ?, 'active')
+            ");
+            $stmt->execute([$name, $email, $phone, $hashed, $role]);
+            $user_id = $this->db->lastInsertId();
 
             if ($role === 'vet') {
                 $this->db->prepare("INSERT INTO veterinarians (user_id) VALUES (?)")
                          ->execute([$user_id]);
-            } elseif ($role === 'provider') {
+            } 
+            elseif ($role === 'provider') {
                 $this->db->prepare("INSERT INTO service_providers (user_id, business_name) VALUES (?, ?)")
                          ->execute([$user_id, $name]);
-            } elseif ($role === 'vendor') {
-                $this->db->prepare("INSERT INTO vendors (name, balance, is_active) VALUES (?, 0.00, 1)")
-                         ->execute([$name]);
+            } 
+            elseif ($role === 'vendor') {
+                $this->db->prepare("
+                    INSERT INTO vendors (user_id, name, balance, commission_rate, tax_rate, is_active) 
+                    VALUES (?, ?, 0.00, 0.1000, 0.1400, 1)
+                ")->execute([$user_id, $name]);
             }
 
-            if ($user_id) {
+            if ($user_id && in_array($role, ['vet', 'provider'])) {
                 KYCModel::createKYC($user_id, $name, $email, $role);
             }
 
@@ -217,21 +245,7 @@ class ProviderModel
         return false;
     }
 
-    private function getUserId($id, $role)
-    {
-        if ($role === 'vet') {
-            $stmt = $this->db->prepare("SELECT user_id FROM veterinarians WHERE id = ?");
-            $stmt->execute([$id]);
-            return $stmt->fetchColumn();
-        }
-        if ($role === 'provider') {
-            $stmt = $this->db->prepare("SELECT user_id FROM service_providers WHERE id = ?");
-            $stmt->execute([$id]);
-            return $stmt->fetchColumn();
-        }
-        return null;
-    }
-
+    
     public function deleteProvider($id)
     {
         $provider = $this->getById($id);
@@ -240,7 +254,15 @@ class ProviderModel
         $this->db->beginTransaction();
         try {
             if ($provider['role'] === 'vendor') {
+                // Get user_id first
+                $stmt = $this->db->prepare("SELECT user_id FROM vendors WHERE id = ?");
+                $stmt->execute([$id]);
+                $user_id = $stmt->fetchColumn();
+
                 $this->db->prepare("DELETE FROM vendors WHERE id = ?")->execute([$id]);
+                if ($user_id) {
+                    $this->db->prepare("DELETE FROM users WHERE id = ?")->execute([$user_id]);
+                }
             } else {
                 $user_id = $this->getUserId($id, $provider['role']);
                 if ($user_id) {
@@ -259,5 +281,20 @@ class ProviderModel
             error_log("Delete Provider Error: " . $e->getMessage());
             return false;
         }
+    }
+
+    private function getUserId($id, $role)
+    {
+        if ($role === 'vet') {
+            $stmt = $this->db->prepare("SELECT user_id FROM veterinarians WHERE id = ?");
+            $stmt->execute([$id]);
+            return $stmt->fetchColumn();
+        }
+        if ($role === 'provider') {
+            $stmt = $this->db->prepare("SELECT user_id FROM service_providers WHERE id = ?");
+            $stmt->execute([$id]);
+            return $stmt->fetchColumn();
+        }
+        return null;
     }
 }

@@ -10,7 +10,7 @@ class UserController
     {
         $this->service = new UserService();
     }
-
+ 
     public function index()
     {
         $search = $_GET['search'] ?? '';

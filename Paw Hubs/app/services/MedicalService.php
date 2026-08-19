@@ -10,7 +10,6 @@ class MedicalService {
     }
 
     public function getHealthSummary($petId) {
-        // Business logic to calculate health summary
         $records = $this->medicalModel->getByPet($petId);
 
         if (!empty($records)) {
